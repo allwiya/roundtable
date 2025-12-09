@@ -201,6 +201,38 @@ class CLIAvailabilityChecker:
                 "error": str(e)
             }
 
+    async def check_kiro_availability(self) -> Dict[str, Any]:
+        """Check if Kiro CLI is available."""
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                "kiro-cli --help",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+
+            if proc.returncode == 0:
+                return {
+                    "available": True,
+                    "status": "✅ Kiro CLI Available",
+                    "last_checked": datetime.now().isoformat(),
+                    "error": None
+                }
+            else:
+                return {
+                    "available": False,
+                    "status": f"❌ Kiro CLI failed with exit code {proc.returncode}",
+                    "last_checked": datetime.now().isoformat(),
+                    "error": stderr.decode() if stderr else None
+                }
+        except Exception as e:
+            return {
+                "available": False,
+                "status": f"❌ Kiro CLI error: {str(e)}",
+                "last_checked": datetime.now().isoformat(),
+                "error": str(e)
+            }
+
     async def check_all_availability(self) -> Dict[str, Dict[str, Any]]:
         """Check availability of all CLI tools."""
         logger.info("Starting CLI availability check...")
@@ -212,10 +244,11 @@ class CLIAvailabilityChecker:
             self.check_cursor_availability(),
             self.check_gemini_availability(),
             self.check_qwen_availability(),
+            self.check_kiro_availability(),
             return_exceptions=True
         )
 
-        cli_names = ["codex", "claude", "cursor", "gemini", "qwen"]
+        cli_names = ["codex", "claude", "cursor", "gemini", "qwen", "kiro"]
         availability_results = {}
 
         for cli_name, result in zip(cli_names, results):

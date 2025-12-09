@@ -17,6 +17,7 @@ from claudable_helper.cli.adapters.claude_code import ClaudeCodeCLI
 from claudable_helper.cli.adapters.cursor_agent import CursorAgentCLI
 from claudable_helper.cli.adapters.gemini_cli import GeminiCLI
 from claudable_helper.cli.adapters.qwen_cli import QwenCLI
+from claudable_helper.cli.adapters.kiro_cli import KiroCLI
 from claudable_helper.core.terminal_ui import ui
 from claudable_helper.models.messages import Message
 
@@ -27,6 +28,7 @@ _claude_cli = None
 _cursor_cli = None
 _gemini_cli = None
 _qwen_cli = None
+_kiro_cli = None
 
 
 def _check_claude_code_sdk() -> tuple[bool, str]:
@@ -90,6 +92,14 @@ async def get_qwen_cli() -> QwenCLI:
     if _qwen_cli is None:
         _qwen_cli = QwenCLI()
     return _qwen_cli
+
+
+async def get_kiro_cli() -> KiroCLI:
+    """Get or create a KiroCLI instance."""
+    global _kiro_cli
+    if _kiro_cli is None:
+        _kiro_cli = KiroCLI()
+    return _kiro_cli
 
 
 @tool(
@@ -927,6 +937,90 @@ async def check_gemini_availability() -> str:
 
     except Exception as e:
         return f"❌ **Error checking Gemini:** {str(e)}"
+
+
+@tool(
+    name="kiro_subagent",
+    description="""Execute a coding task using Kiro CLI agent.
+
+    Kiro has access to file operations, shell commands, web search, and can make
+    code changes directly. It's ideal for implementing features, fixing bugs,
+    refactoring code, and other development tasks.
+    """
+)
+async def kiro_subagent(
+    instruction: str,
+    project_path: Optional[str] = None,
+    session_id: Optional[str] = None,
+    model: Optional[str] = None,
+    images: Optional[List[Dict[str, Any]]] = None,
+    is_initial_prompt: bool = False
+) -> str:
+    """Execute a coding task using Kiro CLI agent."""
+    try:
+        kiro_cli = await get_kiro_cli()
+        availability = await kiro_cli.check_availability()
+        if not availability.get("available", False):
+            error_msg = availability.get("error", "Kiro CLI not available")
+            ui.error(f"Kiro unavailable: {error_msg}", "KiroSubagent")
+            return f"❌ Kiro CLI not available: {error_msg}"
+
+        if not project_path or project_path.strip() == "":
+            project_path = str(Path.cwd().absolute())
+            ui.debug(f"Using fallback directory: {project_path}", "KiroSubagent")
+        else:
+            project_path = str(Path(project_path).absolute())
+            ui.debug(f"Using provided project path: {project_path}", "KiroSubagent")
+
+        if not Path(project_path).exists():
+            error_msg = f"Project directory does not exist: {project_path}"
+            ui.error(error_msg, "KiroSubagent")
+            return f"❌ {error_msg}"
+
+        ui.info(f"Starting Kiro subagent task: {instruction[:50]}...", "KiroSubagent")
+
+        messages = []
+        agent_responses = []
+
+        async for message in kiro_cli.execute_with_streaming(
+            instruction=instruction,
+            project_path=project_path,
+            session_id=session_id,
+            model=model,
+            images=images,
+            is_initial_prompt=is_initial_prompt
+        ):
+            messages.append(message)
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+
+        if not agent_responses:
+            return "✅ Kiro task completed successfully"
+
+        return f"**Kiro Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Kiro Response:**\n{chr(10).join(agent_responses)}"
+
+    except Exception as e:
+        error_msg = f"Kiro subagent execution failed: {str(e)}"
+        ui.error(error_msg, "KiroSubagent")
+        return f"❌ {error_msg}"
+
+
+@tool(name="check_kiro_availability")
+async def check_kiro_availability() -> str:
+    """Check if Kiro CLI is available."""
+    try:
+        kiro_cli = await get_kiro_cli()
+        availability = await kiro_cli.check_availability()
+
+        if availability.get("available", False):
+            return "✅ **Kiro CLI Available**"
+        else:
+            error = availability.get("error", "Unknown error")
+            return f"❌ **Kiro CLI Unavailable:** {error}"
+
+    except Exception as e:
+        return f"❌ **Error checking Kiro:** {str(e)}"
 
 
 class CLISubagentManager:
