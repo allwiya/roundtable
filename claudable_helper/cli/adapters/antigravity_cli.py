@@ -31,7 +31,7 @@ class AntigravityCLI(BaseCLI):
                 async for line in proc.stdout:
                     line_text = line.decode().strip()
                     if line_text:
-                        yield Message(project_id=project_path, role="assistant", message_type=MessageType.TEXT, content=line_text, session_id=session_id or "default", created_at=datetime.utcnow())
+                        yield Message(project_id=project_path, role="assistant", message_type=MessageType.ASSISTANT, content=line_text, session_id=session_id or "default", created_at=datetime.utcnow())
             await proc.wait()
         except Exception as e:
             yield Message(project_id=project_path, role="assistant", message_type=MessageType.ERROR, content=f"Error: {str(e)}", session_id=session_id or "default", created_at=datetime.utcnow())

@@ -14,8 +14,8 @@ class CopilotCLI(BaseCLI):
     """Adapter for GitHub Copilot CLI."""
 
     def __init__(self):
-        super().__init__()
-        self.cli_type = "copilot"
+        super().__init__(cli_type="copilot")
+        self.session_mapping: Dict[str, str] = {}
 
     async def check_availability(self) -> Dict[str, Any]:
         """Check if GitHub Copilot CLI is available."""
@@ -83,7 +83,7 @@ class CopilotCLI(BaseCLI):
                         yield Message(
                             project_id=project_path,
                             role="assistant",
-                            message_type=MessageType.TEXT,
+                            message_type=MessageType.ASSISTANT,
                             content=line_text,
                             session_id=session_id or "default",
                             created_at=datetime.utcnow(),
@@ -113,3 +113,11 @@ class CopilotCLI(BaseCLI):
                 session_id=session_id or "default",
                 created_at=datetime.utcnow(),
             )
+
+    async def get_session_id(self, project_id: str) -> Optional[str]:
+        """Get current session ID for project"""
+        return self.session_mapping.get(project_id)
+
+    async def set_session_id(self, project_id: str, session_id: str) -> None:
+        """Set session ID for project in memory"""
+        self.session_mapping[project_id] = session_id

@@ -11,8 +11,8 @@ from claudable_helper.models.messages import Message, MessageType
 
 class FactoryCLI(BaseCLI):
     def __init__(self):
-        super().__init__()
-        self.cli_type = "factory"
+        super().__init__(cli_type="factory")
+        self.session_mapping: Dict[str, str] = {}
 
     async def check_availability(self) -> Dict[str, Any]:
         try:
@@ -31,7 +31,15 @@ class FactoryCLI(BaseCLI):
                 async for line in proc.stdout:
                     line_text = line.decode().strip()
                     if line_text:
-                        yield Message(project_id=project_path, role="assistant", message_type=MessageType.TEXT, content=line_text, session_id=session_id or "default", created_at=datetime.utcnow())
+                        yield Message(project_id=project_path, role="assistant", message_type=MessageType.ASSISTANT, content=line_text, session_id=session_id or "default", created_at=datetime.utcnow())
             await proc.wait()
         except Exception as e:
             yield Message(project_id=project_path, role="assistant", message_type=MessageType.ERROR, content=f"Error: {str(e)}", session_id=session_id or "default", created_at=datetime.utcnow())
+
+    async def get_session_id(self, project_id: str) -> Optional[str]:
+        """Get current session ID for project"""
+        return self.session_mapping.get(project_id)
+
+    async def set_session_id(self, project_id: str, session_id: str) -> None:
+        """Set session ID for project in memory"""
+        self.session_mapping[project_id] = session_id

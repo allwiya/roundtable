@@ -114,3 +114,131 @@ class TestAgentsReal:
         
         content = power_file.read_text()
         assert len(content) > 0, "power.py is empty"
+
+    async def test_cursor_creates_file(self, test_project_path):
+        """Test Cursor actually creates a file."""
+        from roundtable_mcp_server.cli_subagent import cursor_subagent, check_cursor_availability
+        
+        availability = await check_cursor_availability()
+        if "Unavailable" in availability:
+            pytest.skip("Cursor not available")
+        
+        result = await cursor_subagent(
+            instruction="Create a Python file called modulo.py with a function that calculates 10 % 3 and prints the result",
+            project_path=test_project_path
+        )
+        
+        modulo_file = Path(test_project_path) / "modulo.py"
+        assert modulo_file.exists(), f"Cursor failed to create modulo.py. Result: {result}"
+
+    async def test_copilot_creates_file(self, test_project_path):
+        """Test Copilot actually creates a file."""
+        from roundtable_mcp_server.cli_subagent import copilot_subagent, check_copilot_availability
+        
+        availability = await check_copilot_availability()
+        if "Unavailable" in availability:
+            pytest.skip("Copilot not available")
+        
+        result = await copilot_subagent(
+            instruction="Create a Python file called floor.py with a function that calculates 7 // 2 and prints the result",
+            project_path=test_project_path
+        )
+        
+        floor_file = Path(test_project_path) / "floor.py"
+        assert floor_file.exists(), f"Copilot failed to create floor.py. Result: {result}"
+
+    async def test_grok_creates_file(self, test_project_path):
+        """Test Grok actually creates a file."""
+        from roundtable_mcp_server.cli_subagent import grok_subagent, check_grok_availability
+        
+        availability = await check_grok_availability()
+        if "Unavailable" in availability:
+            pytest.skip("Grok not available")
+        
+        result = await grok_subagent(
+            instruction="Create a Python file called max_num.py with a function that finds max of 5 and 9 and prints the result",
+            project_path=test_project_path
+        )
+        
+        max_file = Path(test_project_path) / "max_num.py"
+        assert max_file.exists(), f"Grok failed to create max_num.py. Result: {result}"
+
+    async def test_kilocode_creates_file(self, test_project_path):
+        """Test Kilocode actually creates a file."""
+        from roundtable_mcp_server.cli_subagent import kilocode_subagent, check_kilocode_availability
+        
+        availability = await check_kilocode_availability()
+        if "Unavailable" in availability:
+            pytest.skip("Kilocode not available")
+        
+        result = await kilocode_subagent(
+            instruction="Create a Python file called min_num.py with a function that finds min of 3 and 7 and prints the result",
+            project_path=test_project_path
+        )
+        
+        min_file = Path(test_project_path) / "min_num.py"
+        assert min_file.exists(), f"Kilocode failed to create min_num.py. Result: {result}"
+
+    async def test_crush_creates_file(self, test_project_path):
+        """Test Crush actually creates a file."""
+        from roundtable_mcp_server.cli_subagent import crush_subagent, check_crush_availability
+        
+        availability = await check_crush_availability()
+        if "Unavailable" in availability:
+            pytest.skip("Crush not available")
+        
+        result = await crush_subagent(
+            instruction="Create a Python file called abs_val.py with a function that calculates abs(-5) and prints the result",
+            project_path=test_project_path
+        )
+        
+        abs_file = Path(test_project_path) / "abs_val.py"
+        assert abs_file.exists(), f"Crush failed to create abs_val.py. Result: {result}"
+
+    async def test_opencode_creates_file(self, test_project_path):
+        """Test OpenCode actually creates a file."""
+        from roundtable_mcp_server.cli_subagent import opencode_subagent, check_opencode_availability
+        
+        availability = await check_opencode_availability()
+        if "Unavailable" in availability:
+            pytest.skip("OpenCode not available")
+        
+        result = await opencode_subagent(
+            instruction="Create a Python file called round_num.py with a function that rounds 3.7 and prints the result",
+            project_path=test_project_path
+        )
+        
+        round_file = Path(test_project_path) / "round_num.py"
+        assert round_file.exists(), f"OpenCode failed to create round_num.py. Result: {result}"
+
+    async def test_factory_creates_file(self, test_project_path):
+        """Test Factory actually creates a file."""
+        from roundtable_mcp_server.cli_subagent import factory_subagent, check_factory_availability
+        
+        availability = await check_factory_availability()
+        if "Unavailable" in availability or "not enabled" in availability:
+            pytest.skip("Factory not available")
+        
+        result = await factory_subagent(
+            instruction="Create a Python file called len_str.py with a function that calculates len('hello') and prints the result",
+            project_path=test_project_path
+        )
+        
+        len_file = Path(test_project_path) / "len_str.py"
+        assert len_file.exists(), f"Factory failed to create len_str.py. Result: {result}"
+
+    async def test_rovo_creates_file(self, test_project_path):
+        """Test Rovo actually creates a file."""
+        from roundtable_mcp_server.cli_subagent import rovo_subagent, check_rovo_availability
+        
+        availability = await check_rovo_availability()
+        if "Unavailable" in availability:
+            pytest.skip("Rovo not available")
+        
+        result = await rovo_subagent(
+            instruction="Create a Python file called upper_str.py with a function that converts 'hello' to uppercase and prints the result",
+            project_path=test_project_path
+        )
+        
+        upper_file = Path(test_project_path) / "upper_str.py"
+        assert upper_file.exists(), f"Rovo failed to create upper_str.py. Result: {result}"
