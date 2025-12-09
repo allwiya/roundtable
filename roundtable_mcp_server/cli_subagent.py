@@ -25,6 +25,7 @@ from claudable_helper.cli.adapters.crush_cli import CrushCLI
 from claudable_helper.cli.adapters.opencode_cli import OpenCodeCLI
 from claudable_helper.cli.adapters.antigravity_cli import AntigravityCLI
 from claudable_helper.cli.adapters.factory_cli import FactoryCLI
+from claudable_helper.cli.adapters.rovo_cli import RovoCLI
 from claudable_helper.core.terminal_ui import ui
 from claudable_helper.models.messages import Message
 
@@ -43,6 +44,7 @@ _crush_cli = None
 _opencode_cli = None
 _antigravity_cli = None
 _factory_cli = None
+_rovo_cli = None
 
 
 def _check_claude_code_sdk() -> tuple[bool, str]:
@@ -1372,6 +1374,52 @@ async def check_factory_availability() -> str:
             return f"❌ **Factory/Droid CLI Unavailable**"
     except Exception as e:
         return f"❌ **Error checking Factory/Droid:** {str(e)}"
+
+
+
+
+async def get_rovo_cli() -> RovoCLI:
+    global _rovo_cli
+    if _rovo_cli is None:
+        _rovo_cli = RovoCLI()
+    return _rovo_cli
+
+
+@tool(name="rovo_subagent", description="Execute a coding task using Rovo Dev CLI agent.")
+async def rovo_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, images: Optional[List[Dict[str, Any]]] = None, is_initial_prompt: bool = False) -> str:
+    try:
+        rovo_cli = await get_rovo_cli()
+        availability = await rovo_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Rovo Dev CLI not available"
+        if not project_path or project_path.strip() == "":
+            project_path = str(Path.cwd().absolute())
+        else:
+            project_path = str(Path(project_path).absolute())
+        if not Path(project_path).exists():
+            return f"❌ Project directory does not exist: {project_path}"
+        agent_responses = []
+        async for message in rovo_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=images, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Rovo Dev task completed"
+        return f"**Rovo Dev:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Rovo Dev:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Rovo Dev execution failed: {str(e)}"
+
+@tool(name="check_rovo_availability")
+async def check_rovo_availability() -> str:
+    try:
+        rovo_cli = await get_rovo_cli()
+        availability = await rovo_cli.check_availability()
+        if availability.get("available", False):
+            return "✅ **Rovo Dev CLI Available**"
+        else:
+            return f"❌ **Rovo Dev CLI Unavailable**"
+    except Exception as e:
+        return f"❌ **Error checking Rovo Dev:** {str(e)}"
 
 
 class CLISubagentManager:
