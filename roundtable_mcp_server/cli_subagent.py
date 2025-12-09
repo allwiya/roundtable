@@ -823,6 +823,26 @@ async def gemini_subagent(
 
 
 @tool(
+    name="check_qwen_availability",
+    description="Check if Qwen CLI is available and configured properly."
+)
+async def check_qwen_availability() -> str:
+    """Check if Qwen CLI is available."""
+    try:
+        qwen_cli = await get_qwen_cli()
+        availability = await qwen_cli.check_availability()
+
+        if availability.get("available", False):
+            return "✅ **Qwen CLI Available**"
+        else:
+            error = availability.get("error", "Unknown error")
+            return f"❌ **Qwen CLI Unavailable:** {error}"
+
+    except Exception as e:
+        return f"❌ **Error checking Qwen:** {str(e)}"
+
+
+@tool(
     name="qwen_subagent",
     description="""Execute a coding task using Qwen CLI agent.
 
