@@ -290,7 +290,7 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=roundtable-ai&config=eyJ0eXB
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -308,7 +308,7 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=roundtable-ai&config=eyJ0eXB
         "roundtable-ai@latest"
       ],
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -326,7 +326,7 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=roundtable-ai&config=eyJ0eXB
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -341,7 +341,7 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=roundtable-ai&config=eyJ0eXB
       "command": "uvx",
       "args": ["roundtable-ai@latest"],
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -359,7 +359,7 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=roundtable-ai&config=eyJ0eXB
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -374,7 +374,7 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=roundtable-ai&config=eyJ0eXB
       "command": "uvx",
       "args": ["roundtable-ai@latest"],
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -391,7 +391,7 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=roundtable-ai&config=eyJ0eXB
 [mcp_servers.roundtable-ai]
 command = "roundtable-ai"
 args = []
-env = { "CLI_MCP_SUBAGENTS" = "codex,claude,cursor,gemini" }
+env = { "CLI_MCP_SUBAGENTS" = "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo" }
 ```
 
 **Using UVX:**
@@ -400,7 +400,7 @@ env = { "CLI_MCP_SUBAGENTS" = "codex,claude,cursor,gemini" }
 [mcp_servers.roundtable-ai]
 command = "uvx"
 args = ["roundtable-ai@latest"]
-env = { "CLI_MCP_SUBAGENTS" = "codex,claude,cursor,gemini" }
+env = { "CLI_MCP_SUBAGENTS" = "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo" }
 ```
 
 ### 6. Windsurf
@@ -414,7 +414,7 @@ env = { "CLI_MCP_SUBAGENTS" = "codex,claude,cursor,gemini" }
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -429,7 +429,7 @@ env = { "CLI_MCP_SUBAGENTS" = "codex,claude,cursor,gemini" }
       "command": "uvx",
       "args": ["roundtable-ai@latest"],
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -447,7 +447,7 @@ env = { "CLI_MCP_SUBAGENTS" = "codex,claude,cursor,gemini" }
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -462,7 +462,7 @@ env = { "CLI_MCP_SUBAGENTS" = "codex,claude,cursor,gemini" }
       "command": "uvx",
       "args": ["roundtable-ai@latest"],
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -483,7 +483,7 @@ Roundtable AI integrates with **26+ different IDEs and AI coding tools**:
   "command": "roundtable-ai",
   "transport": "stdio",
   "env": {
-    "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+    "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
   }
 }
 ```
@@ -497,7 +497,7 @@ Roundtable AI integrates with **26+ different IDEs and AI coding tools**:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -511,7 +511,7 @@ Roundtable AI integrates with **26+ different IDEs and AI coding tools**:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "args": [
-        "--agents=codex,claude,cursor,gemini"
+        "--agents=codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       ]
     }
   }
@@ -536,7 +536,7 @@ Roundtable AI integrates with **26+ different IDEs and AI coding tools**:
      "command": "roundtable-ai",
      "transport": "stdio",
      "env": {
-       "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini",
+       "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo",
      }
    }
    ```
@@ -555,7 +555,7 @@ Create `mcp_config.json` in your project root:
       "command": "roundtable-ai",
       "transport": "stdio",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -576,7 +576,7 @@ Add to `settings.json` (Cmd/Ctrl + ,):
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -601,7 +601,7 @@ Edit `~/.gemini/settings.json`:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -629,7 +629,7 @@ rovo mcp list
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -648,7 +648,7 @@ Edit configuration in `~/.aws/q-developer/config.json`:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -668,7 +668,7 @@ Create or edit `crush.json` in your project:
       "command": "roundtable-ai",
       "transport": "stdio",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -689,7 +689,7 @@ Configure via Warp settings:
      "name": "roundtable-ai",
      "command": "roundtable-ai",
      "env": {
-       "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+       "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
      }
    }
    ```
@@ -710,7 +710,7 @@ Edit `~/.config/claude_desktop_config.json`:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -734,7 +734,7 @@ Edit `~/.config/claude_desktop_config.json`:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -769,7 +769,7 @@ Configure in Perplexity settings:
       "roundtable-ai": {
         "command": "roundtable-ai",
         "env": {
-          "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+          "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
         }
       }
     }
@@ -789,7 +789,7 @@ Add to Qodo Gen configuration:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -812,7 +812,7 @@ Add to `opencode_config.json`:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -828,7 +828,7 @@ Edit `config.toml`:
 ```toml
 [mcp_servers.roundtable-ai]
 command = "roundtable-ai"
-env = { CLI_MCP_SUBAGENTS = "codex,claude,cursor,gemini" }
+env = { CLI_MCP_SUBAGENTS = "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo" }
 ```
 
 </details>
@@ -843,7 +843,7 @@ Configure in `~/.kiro/config.json`:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -863,7 +863,7 @@ Add to Trae workspace configuration:
       "roundtable-ai": {
         "command": "roundtable-ai",
         "env": {
-          "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+          "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
         }
       }
     }
@@ -888,7 +888,7 @@ Add to Trae workspace configuration:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -907,7 +907,7 @@ Configure via Zencoder settings panel:
     "roundtable-ai": {
       "command": "roundtable-ai",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -927,7 +927,7 @@ Add to Augment Code workspace settings:
       "command": "roundtable-ai",
       "transport": "stdio",
       "env": {
-        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+        "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
       }
     }
   }
@@ -947,7 +947,7 @@ Configure in Roo Code project settings:
       "roundtable-ai": {
         "command": "roundtable-ai",
         "env": {
-          "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini"
+          "CLI_MCP_SUBAGENTS": "codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
         }
       }
     }
@@ -964,7 +964,7 @@ Configure in Roo Code project settings:
 #### Environment Variables Reference
 ```bash
 # Specify which AI assistants to enable
-CLI_MCP_SUBAGENTS="codex,claude,cursor,gemini"
+CLI_MCP_SUBAGENTS="codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo"
 
 
 # Enable debug logging
