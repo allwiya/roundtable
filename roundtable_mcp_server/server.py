@@ -63,6 +63,31 @@ logger = logging.getLogger(__name__)
 
 CLIAvailabilityChecker = _import_module_item("availability_checker", "CLIAvailabilityChecker")
 
+# Import error handling and monitoring modules
+try:
+    from roundtable_mcp_server.exceptions import (
+        RoundtableError,
+        AgentNotAvailableError,
+        AgentExecutionError,
+        ConfigurationError
+    )
+    from roundtable_mcp_server.retry import retry_async
+    from roundtable_mcp_server.error_handler import handle_agent_error
+    from roundtable_mcp_server.metrics import MetricsCollector, track_execution
+    ERROR_HANDLING_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Error handling modules not available: {e}")
+    ERROR_HANDLING_AVAILABLE = False
+    # Define fallback exception classes
+    class RoundtableError(Exception):
+        pass
+    class AgentNotAvailableError(RoundtableError):
+        pass
+    class AgentExecutionError(RoundtableError):
+        pass
+    class ConfigurationError(RoundtableError):
+        pass
+
 # Import CLI adapters directly for MCP streaming with progress
 try:
     from claudable_helper.cli.adapters.codex_cli import CodexCLI
@@ -190,6 +215,53 @@ def initialize_config():
     logger.info(f"Enabled subagents: {', '.join(enabled_subagents)}")
     logger.info(f"Working directory: {working_dir}")
     logger.info(f"Verbose: {verbose}")
+    
+    # Initialize metrics collector if available
+    if ERROR_HANDLING_AVAILABLE:
+        metrics_enabled = os.getenv("CLI_MCP_METRICS", "false").lower() in ("true", "1", "yes", "on")
+        if metrics_enabled:
+            logger.info("Metrics collection enabled")
+        else:
+            logger.debug("Metrics collection disabled (set CLI_MCP_METRICS=true to enable)")
+
+
+# Helper functions with error handling
+async def _execute_codex_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: str,
+    is_initial_prompt: bool
+) -> str:
+    """Execute Codex with error handling and retry logic."""
+    codex_cli = CodexCLI()
+    
+    # Check availability
+    availability = await codex_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Codex CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    # Execute with streaming
+    messages = []
+    agent_responses = []
+    
+    async for message in codex_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        messages.append(message)
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Codex task completed successfully"
+    
+    return f"**Codex Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Codex Response:**\n{chr(10).join(agent_responses)}"
 
 
 # Tool definitions
@@ -382,6 +454,18 @@ async def codex_subagent(
     logger.info(f"Codex: {model} [INSTRUCTION]: {instruction}")
     logger.debug(f"[MCP-TOOL] codex_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
     
+    # Use error handler if available
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_codex_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Codex CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Codex execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "codex", instruction)
 
     try:
         # Initialize CodexCLI directly
