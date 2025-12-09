@@ -265,6 +265,66 @@ class CLIAvailabilityChecker:
                 "error": str(e)
             }
 
+
+    async def check_grok_availability(self) -> Dict[str, Any]:
+        """Check if Grok CLI is available."""
+        try:
+            proc = await asyncio.create_subprocess_shell("grok --help", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                return {"available": True, "status": "✅ Grok CLI Available", "last_checked": datetime.now().isoformat(), "error": None}
+            else:
+                return {"available": False, "status": f"❌ Grok CLI failed", "last_checked": datetime.now().isoformat(), "error": stderr.decode() if stderr else None}
+        except Exception as e:
+            return {"available": False, "status": f"❌ Grok CLI error: {str(e)}", "last_checked": datetime.now().isoformat(), "error": str(e)}
+
+    async def check_kilocode_availability(self) -> Dict[str, Any]:
+        """Check if Kilocode CLI is available."""
+        try:
+            proc = await asyncio.create_subprocess_shell("kilocode --help", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                return {"available": True, "status": "✅ Kilocode CLI Available", "last_checked": datetime.now().isoformat(), "error": None}
+            else:
+                return {"available": False, "status": f"❌ Kilocode CLI failed", "last_checked": datetime.now().isoformat(), "error": stderr.decode() if stderr else None}
+        except Exception as e:
+            return {"available": False, "status": f"❌ Kilocode CLI error: {str(e)}", "last_checked": datetime.now().isoformat(), "error": str(e)}
+
+    async def check_crush_availability(self) -> Dict[str, Any]:
+        """Check if Crush CLI is available."""
+        try:
+            proc = await asyncio.create_subprocess_shell("crush --help", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                return {"available": True, "status": "✅ Crush CLI Available", "last_checked": datetime.now().isoformat(), "error": None}
+            else:
+                return {"available": False, "status": f"❌ Crush CLI failed", "last_checked": datetime.now().isoformat(), "error": stderr.decode() if stderr else None}
+        except Exception as e:
+            return {"available": False, "status": f"❌ Crush CLI error: {str(e)}", "last_checked": datetime.now().isoformat(), "error": str(e)}
+
+    async def check_opencode_availability(self) -> Dict[str, Any]:
+        """Check if OpenCode CLI is available."""
+        try:
+            proc = await asyncio.create_subprocess_shell("opencode --help", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                return {"available": True, "status": "✅ OpenCode CLI Available", "last_checked": datetime.now().isoformat(), "error": None}
+            else:
+                return {"available": False, "status": f"❌ OpenCode CLI failed", "last_checked": datetime.now().isoformat(), "error": stderr.decode() if stderr else None}
+        except Exception as e:
+            return {"available": False, "status": f"❌ OpenCode CLI error: {str(e)}", "last_checked": datetime.now().isoformat(), "error": str(e)}
+
+    async def check_antigravity_availability(self) -> Dict[str, Any]:
+        """Check if Antigravity CLI is available."""
+        try:
+            proc = await asyncio.create_subprocess_shell("antigravity --help", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                return {"available": True, "status": "✅ Antigravity CLI Available", "last_checked": datetime.now().isoformat(), "error": None}
+            else:
+                return {"available": False, "status": f"❌ Antigravity CLI failed", "last_checked": datetime.now().isoformat(), "error": stderr.decode() if stderr else None}
+        except Exception as e:
+            return {"available": False, "status": f"❌ Antigravity CLI error: {str(e)}", "last_checked": datetime.now().isoformat(), "error": str(e)}
     async def check_all_availability(self) -> Dict[str, Dict[str, Any]]:
         """Check availability of all CLI tools."""
         logger.info("Starting CLI availability check...")
@@ -278,10 +338,15 @@ class CLIAvailabilityChecker:
             self.check_qwen_availability(),
             self.check_kiro_availability(),
             self.check_copilot_availability(),
+            self.check_grok_availability(),
+            self.check_kilocode_availability(),
+            self.check_crush_availability(),
+            self.check_opencode_availability(),
+            self.check_antigravity_availability(),
             return_exceptions=True
         )
 
-        cli_names = ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot"]
+        cli_names = ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity"]
         availability_results = {}
 
         for cli_name, result in zip(cli_names, results):

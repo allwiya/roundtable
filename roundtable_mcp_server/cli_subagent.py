@@ -19,6 +19,11 @@ from claudable_helper.cli.adapters.gemini_cli import GeminiCLI
 from claudable_helper.cli.adapters.qwen_cli import QwenCLI
 from claudable_helper.cli.adapters.kiro_cli import KiroCLI
 from claudable_helper.cli.adapters.copilot_cli import CopilotCLI
+from claudable_helper.cli.adapters.grok_cli import GrokCLI
+from claudable_helper.cli.adapters.kilocode_cli import KilocodeCLI
+from claudable_helper.cli.adapters.crush_cli import CrushCLI
+from claudable_helper.cli.adapters.opencode_cli import OpenCodeCLI
+from claudable_helper.cli.adapters.antigravity_cli import AntigravityCLI
 from claudable_helper.core.terminal_ui import ui
 from claudable_helper.models.messages import Message
 
@@ -31,6 +36,11 @@ _gemini_cli = None
 _qwen_cli = None
 _kiro_cli = None
 _copilot_cli = None
+_grok_cli = None
+_kilocode_cli = None
+_crush_cli = None
+_opencode_cli = None
+_antigravity_cli = None
 
 
 def _check_claude_code_sdk() -> tuple[bool, str]:
