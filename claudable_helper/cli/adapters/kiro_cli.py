@@ -16,8 +16,7 @@ class KiroCLI(BaseCLI):
     """Adapter for Kiro CLI."""
 
     def __init__(self):
-        super().__init__()
-        self.cli_type = "kiro"
+        super().__init__(cli_type="kiro")
 
     async def check_availability(self) -> Dict[str, Any]:
         """Check if Kiro CLI is available."""
@@ -133,3 +132,11 @@ class KiroCLI(BaseCLI):
                 session_id=session_id or "default",
                 created_at=datetime.utcnow(),
             )
+
+    async def get_session_id(self, project_id: str) -> Optional[str]:
+        """Get session ID for project (Kiro doesn't use sessions)."""
+        return None
+
+    async def set_session_id(self, project_id: str, session_id: str) -> None:
+        """Set session ID for project (Kiro doesn't use sessions)."""
+        pass
