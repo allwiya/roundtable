@@ -477,6 +477,7 @@ Roundtable AI integrates with **26+ different IDEs and AI coding tools**:
 
 #### GitHub Copilot
 
+**Standard Configuration** (recommended):
 ```json
 {
   "github.copilot.mcp.servers": {
@@ -489,6 +490,22 @@ Roundtable AI integrates with **26+ different IDEs and AI coding tools**:
   }
 }
 ```
+
+**Alternative Configuration** (if ENV variables don't work):
+```json
+{
+  "github.copilot.mcp.servers": {
+    "roundtable-ai": {
+      "command": "roundtable-ai",
+      "args": [
+        "--agents=codex,claude,cursor,gemini"
+      ]
+    }
+  }
+}
+```
+
+> **Note**: GitHub Copilot CLI has a known bug with environment variables. If the standard configuration doesn't work, use the alternative format with `args` instead of `env`.
 
 ---
 
