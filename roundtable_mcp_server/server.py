@@ -236,12 +236,10 @@ async def _execute_codex_with_error_handling(
     """Execute Codex with error handling and retry logic."""
     codex_cli = CodexCLI()
     
-    # Check availability
     availability = await codex_cli.check_availability()
     if not availability.get("available", False):
         raise AgentNotAvailableError(f"Codex CLI not available: {availability.get('error', 'Unknown error')}")
     
-    # Execute with streaming
     messages = []
     agent_responses = []
     
@@ -262,6 +260,142 @@ async def _execute_codex_with_error_handling(
         return "✅ Codex task completed successfully"
     
     return f"**Codex Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Codex Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_claude_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute Claude with error handling."""
+    claude_cli = ClaudeCodeCLI()
+    
+    availability = await claude_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Claude CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    
+    async for message in claude_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Claude task completed successfully"
+    
+    return f"**Claude Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Claude Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_cursor_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute Cursor with error handling."""
+    cursor_cli = CursorAgentCLI()
+    
+    availability = await cursor_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Cursor CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    
+    async for message in cursor_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Cursor task completed successfully"
+    
+    return f"**Cursor Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Cursor Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_gemini_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute Gemini with error handling."""
+    gemini_cli = GeminiCLI()
+    
+    availability = await gemini_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Gemini CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    
+    async for message in gemini_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Gemini task completed successfully"
+    
+    return f"**Gemini Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Gemini Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_qwen_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute Qwen with error handling."""
+    qwen_cli = QwenCLI()
+    
+    availability = await qwen_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Qwen CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    
+    async for message in qwen_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Qwen task completed successfully"
+    
+    return f"**Qwen Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Qwen Response:**\n{chr(10).join(agent_responses)}"
 
 
 # Tool definitions
@@ -635,6 +769,18 @@ async def claude_subagent(
     logger.info(f"Claude: {model} [INSTRUCTION]: {instruction}")
     logger.debug(f"[MCP-TOOL] claude_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
 
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_claude_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Claude CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Claude execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "claude", instruction)
+
     try:
         # Initialize ClaudeCodeCLI directly
         claude_cli = ClaudeCodeCLI()
@@ -783,6 +929,18 @@ async def cursor_subagent(
 
     logger.info(f"Cursor: {model} [INSTRUCTION]: {instruction}")
     logger.debug(f"[MCP-TOOL] cursor_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
+
+    if ERROR_HANDLING_AVAILABLE and CLI_ADAPTERS_AVAILABLE:
+        try:
+            return await _execute_cursor_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Cursor CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Cursor execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "cursor", instruction)
 
     # Prefer streaming via adapter (to emit MCP progress), with safe fallback
     try:
@@ -980,6 +1138,18 @@ async def gemini_subagent(
     logger.info(f"Gemini: {model} [INSTRUCTION]: {instruction}")
     logger.debug(f"[MCP-TOOL] gemini_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
 
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_gemini_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Gemini CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Gemini execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "gemini", instruction)
+
     try:
         # Initialize GeminiCLI directly
         gemini_cli = GeminiCLI()
@@ -1146,6 +1316,18 @@ async def qwen_subagent(
 
     logger.info(f"Qwen: {model} [INSTRUCTION]: {instruction}")
     logger.debug(f"[MCP-TOOL] qwen_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
+
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_qwen_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Qwen CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Qwen execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "qwen", instruction)
 
     try:
         # Initialize QwenCLI directly
