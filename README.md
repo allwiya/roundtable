@@ -1,6 +1,9 @@
 # Roundtable AI MCP Server
 
 [![PyPI version](https://badge.fury.io/py/roundtable-ai.svg)](https://badge.fury.io/py/roundtable-ai)
+[![Tests](https://github.com/allwiya/roundtable/actions/workflows/test.yml/badge.svg)](https://github.com/allwiya/roundtable/actions/workflows/test.yml)
+[![CodeQL](https://github.com/allwiya/roundtable/actions/workflows/codeql.yml/badge.svg)](https://github.com/allwiya/roundtable/actions/workflows/codeql.yml)
+[![codecov](https://codecov.io/gh/allwiya/roundtable/branch/main/graph/badge.svg)](https://codecov.io/gh/allwiya/roundtable)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
