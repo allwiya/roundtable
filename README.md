@@ -34,7 +34,10 @@ Stop copy-pasting between AI models. Roundtable AI is a local MCP server that le
 ## Quick Start
 
 ```bash
-# Install Roundtable AI
+# Install Roundtable AI (standard)
+pip install roundtable-ai
+
+# Or from GitHub (until PyPI merge)
 pip install git+https://github.com/allwiya/roundtable.git@v0.5.0
 
 # Check available AI tools
@@ -227,14 +230,24 @@ Aggregate findings into a performance optimization plan with measurable improvem
 
 ## Installation
 
-### Using pip (from GitHub)
+### Using pip (Standard)
 
+```bash
+pip install roundtable-ai
+```
+
+**Alternative (until PyPI merge):**
 ```bash
 pip install git+https://github.com/allwiya/roundtable.git@v0.5.0
 ```
 
 ### Using UV/UVX (Recommended for faster installs)
 
+```bash
+uvx roundtable-ai@latest
+```
+
+**Alternative (until PyPI merge):**
 ```bash
 uvx --from git+https://github.com/allwiya/roundtable.git@v0.5.0 roundtable-ai
 ```
