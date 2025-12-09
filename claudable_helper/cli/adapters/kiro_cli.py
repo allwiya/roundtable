@@ -48,13 +48,14 @@ class KiroCLI(BaseCLI):
     def _get_cli_model_name(self, model: Optional[str]) -> str:
         """Map generic model name to Kiro CLI model."""
         if not model:
-            return "sonnet-4"
+            return "claude-sonnet-4"
         
         model_map = {
-            "claude-3.5-sonnet": "sonnet-4",
-            "claude-opus": "opus-4",
+            "claude-3.5-sonnet": "claude-sonnet-4",
+            "claude-opus": "claude-opus-4",
             "gpt-4": "gpt-4",
             "gpt-5": "gpt-5",
+            "sonnet-4": "claude-sonnet-4",
         }
         return model_map.get(model, model)
 
@@ -102,7 +103,7 @@ class KiroCLI(BaseCLI):
                         yield Message(
                             project_id=project_path,
                             role="assistant",
-                            message_type=MessageType.TEXT,
+                            message_type=MessageType.ASSISTANT,
                             content=line_text,
                             session_id=session_id or "default",
                             created_at=datetime.utcnow(),
