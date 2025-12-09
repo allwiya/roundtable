@@ -2210,10 +2210,37 @@ Priority Order:
     parser.add_argument(
         "--agents",
         type=str,
-        help="Comma-separated list of agents to enable (codex,claude,cursor,gemini,qwen)"
+        help="Comma-separated list of agents to enable (codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo)"
+    )
+    parser.add_argument(
+        "--working-dir",
+        type=str,
+        help="Default working directory for subagents"
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging"
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output"
     )
 
-    args = parser.parse_args()
+    # Parse known args to support both --flag and --flag=value formats
+    args, unknown = parser.parse_known_args()
+    
+    # Process unknown args for --key=value format (GitHub Copilot CLI compatibility)
+    for arg in unknown:
+        if arg.startswith("--agents="):
+            args.agents = arg.split("=", 1)[1]
+        elif arg.startswith("--working-dir="):
+            args.working_dir = arg.split("=", 1)[1]
+        elif arg.startswith("--debug="):
+            args.debug = arg.split("=", 1)[1].lower() in ("true", "1", "yes")
+        elif arg.startswith("--verbose="):
+            args.verbose = arg.split("=", 1)[1].lower() in ("true", "1", "yes")
 
     if args.check:
         # Run availability check
@@ -2225,9 +2252,15 @@ Priority Order:
             sys.exit(1)
         return
 
-    # If --agents flag is provided, set it as environment variable (highest priority)
+    # Set environment variables from command line args (highest priority)
     if args.agents:
         os.environ["CLI_MCP_SUBAGENTS"] = args.agents
+    if args.working_dir:
+        os.environ["CLI_MCP_WORKING_DIR"] = args.working_dir
+    if args.debug:
+        os.environ["CLI_MCP_DEBUG"] = "true"
+    if args.verbose:
+        os.environ["CLI_MCP_VERBOSE"] = "true"
         print(f"📋 Using agents from command line: {args.agents}")
 
     # Initialize configuration after processing command line arguments
