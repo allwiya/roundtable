@@ -11,7 +11,7 @@ Stop copy-pasting between AI models. Roundtable AI is a local MCP server that le
 **Key Features:**
 - **Context Continuity**: Shared project context across all sub-agents
 - **Parallel Execution**: All agents work simultaneously
-- **Model Specialization**: Right AI for each task (Gemini's 1M context, Claude's reasoning, Codex's implementation)
+- **Model Specialization**: Right AI for each task (Gemini's 1M context, Claude's reasoning, Codex's implementation, Qwen's code generation)
 - **Zero Markup**: Uses your existing CLI tools and API subscriptions
 - **26+ IDE Support**: Works with Claude Code, Cursor, VS Code, JetBrains, and more
 
@@ -41,12 +41,12 @@ roundtable-ai --check
 roundtable-ai
 
 # Use specific assistants only
-roundtable-ai --agents codex,claude
+roundtable-ai --agents codex,claude,qwen
 ```
 
 **One-liner for Claude Code:**
 ```bash
-claude mcp add roundtable-ai -- roundtable-ai --agents gemini,claude,codex,cursor
+claude mcp add roundtable-ai -- roundtable-ai --agents gemini,claude,codex,cursor,qwen
 ```
 
 **Try this multi-agent prompt in your IDE:**

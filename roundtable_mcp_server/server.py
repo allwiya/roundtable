@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Roundtable AI MCP Server.
 
-This MCP server exposes CLI subagents (Codex, Claude, Cursor, Gemini) via the MCP protocol.
+This MCP server exposes CLI subagents (Codex, Claude, Cursor, Gemini, Qwen) via the MCP protocol.
 It supports stdio transport for integration with any MCP-compatible client.
 
 Developed by Roundtable AI for seamless AI assistant integration.
@@ -69,6 +69,7 @@ try:
     from claudable_helper.cli.adapters.claude_code import ClaudeCodeCLI
     from claudable_helper.cli.adapters.cursor_agent import CursorAgentCLI
     from claudable_helper.cli.adapters.gemini_cli import GeminiCLI
+    from claudable_helper.cli.adapters.qwen_cli import QwenCLI
     CLI_ADAPTERS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"CLI adapters not available for direct import: {e}")
@@ -87,7 +88,7 @@ class SubagentConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Configuration for the MCP server."""
     subagents: List[str] = Field(
-        default_factory=lambda: ["codex", "claude", "cursor", "gemini"],
+        default_factory=lambda: ["codex", "claude", "cursor", "gemini", "qwen"],
         description="List of subagents to enable"
     )
     working_dir: Optional[str] = Field(
@@ -126,7 +127,7 @@ def parse_config_from_env() -> ServerConfig:
     if subagents_env:
         # Environment variable override - use specified subagents
         subagents = [s.strip().lower() for s in subagents_env.split(",") if s.strip()]
-        valid_subagents = {"codex", "claude", "cursor", "gemini"}
+        valid_subagents = {"codex", "claude", "cursor", "gemini", "qwen"}
         config.subagents = [s for s in subagents if s in valid_subagents]
         config.verbose = os.getenv("CLI_MCP_VERBOSE", "false").lower() in ("true", "1", "yes", "on")
         logger.info(f"Verbose: {config.verbose}")
@@ -137,7 +138,7 @@ def parse_config_from_env() -> ServerConfig:
         logger.info(f"Using subagents from environment variable: {config.subagents}")
     elif ignore_availability:
         # Ignore availability cache and enable all subagents
-        config.subagents = ["codex", "claude", "cursor", "gemini"]
+        config.subagents = ["codex", "claude", "cursor", "gemini", "qwen"]
         logger.info("Ignoring availability cache - enabling all subagents")
     else:
         # Use availability cache to determine enabled subagents
@@ -151,7 +152,7 @@ def parse_config_from_env() -> ServerConfig:
             # Fallback to default if no availability data
             logger.warning("No availability data found, falling back to default subagents")
             logger.warning("Run 'python -m roundtable_mcp_server.availability_checker --check' to check CLI availability")
-            config.subagents = ["codex", "claude", "cursor", "gemini"]
+            config.subagents = ["codex", "claude", "cursor", "gemini", "qwen"]
 
     # Parse working directory
     working_dir = os.getenv("CLI_MCP_WORKING_DIR")
@@ -284,6 +285,30 @@ async def check_gemini_availability(ctx: Context = None) -> str:
         return result
     except Exception as e:
         error_msg = f"Error checking Gemini availability: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return f"❌ {error_msg}"
+
+
+@server.tool()
+async def check_qwen_availability(ctx: Context = None) -> str:
+    """
+    Check if Qwen CLI is available and configured properly.
+
+    Returns:
+        Status message about Qwen availability
+    """
+    if "qwen" not in enabled_subagents:
+        return "❌ Qwen subagent is not enabled in this server instance"
+
+    logger.info("Checking Qwen availability")
+
+    try:
+        check_qwen = _import_module_item("cli_subagent", "check_qwen_availability")
+        result = await check_qwen()
+        logger.debug(f"Qwen availability result: {result}")
+        return result
+    except Exception as e:
+        error_msg = f"Error checking Qwen availability: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return f"❌ {error_msg}"
 
@@ -971,6 +996,173 @@ async def gemini_subagent(
 
 
 @server.tool()
+async def qwen_subagent(
+    instruction: str,
+    project_path: Optional[str] = None,
+    session_id: Optional[str] = None,
+    model: Optional[str] = None,
+    is_initial_prompt: bool = False,
+    ctx: Context = None
+) -> str:
+    """
+    Execute a coding task using Qwen CLI agent.
+
+    Qwen has access to file operations, shell commands, web search,
+    and can make code changes directly. It's ideal for implementing features,
+    fixing bugs, refactoring code, and other development tasks.
+
+    IMPORTANT: Always provide an absolute path for project_path to ensure proper execution.
+    If you don't provide project_path, the current working directory will be used.
+
+    Args:
+        instruction: The coding task or instruction to execute
+        project_path: ABSOLUTE path to the project directory (e.g., '/home/user/myproject'). If not provided, uses current working directory.
+        session_id: Optional session ID for conversation continuity
+        model: Optional model to use ('qwen-coder' is the default model)
+        is_initial_prompt: Whether this is the first prompt in a new session
+
+    Returns:
+        Summary of what the Qwen agent accomplished
+    """
+    if "qwen" not in enabled_subagents:
+        return "❌ Qwen subagent is not enabled in this server instance"
+
+    if not CLI_ADAPTERS_AVAILABLE:
+        # Fallback to old method if CLI adapters not available
+        try:
+            qwen_exec = _import_module_item("cli_subagent", "qwen_subagent")
+            result = await qwen_exec(
+                instruction=instruction,
+                project_path=project_path,
+                session_id=session_id,
+                model=model,
+                images=None,
+                is_initial_prompt=is_initial_prompt
+            )
+            return result
+        except Exception as e:
+            error_msg = f"Error executing Qwen subagent: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return f"❌ {error_msg}"
+
+    # Robust path validation and fallback
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+        logger.debug(f"Using fallback directory: {project_path}")
+    else:
+        # Ensure we have an absolute path
+        project_path = str(Path(project_path).absolute())
+        logger.debug(f"Using provided project path: {project_path}")
+
+    # Validate the directory exists
+    if not Path(project_path).exists():
+        error_msg = f"Project directory does not exist: {project_path}"
+        logger.error(error_msg)
+        return f"❌ {error_msg}"
+
+    logger.info(f"Qwen: {model} [INSTRUCTION]: {instruction}")
+    logger.debug(f"[MCP-TOOL] qwen_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
+
+    try:
+        # Initialize QwenCLI directly
+        qwen_cli = QwenCLI()
+
+        # Check if Qwen is available
+        availability = await qwen_cli.check_availability()
+        if not availability.get("available", False):
+            error_msg = availability.get("error", "Qwen CLI not available")
+            logger.error(f"Qwen unavailable: {error_msg}")
+            return f"❌ Qwen CLI not available: {error_msg}"
+
+        # Collect all messages from streaming execution with progress reporting
+        messages = []
+        agent_responses = []
+        tool_uses = []
+        message_count = 0
+        logger.info(f"Qwen subagent execution started :verbose={config.verbose}")
+        logger.debug(f"[MCP-TOOL] Qwen CLI streaming started - will process messages and report progress")
+
+        async for message in qwen_cli.execute_with_streaming(
+            instruction=instruction,
+            project_path=project_path,
+            session_id=session_id,
+            model=model,
+            images=None,
+            is_initial_prompt=is_initial_prompt
+        ):
+            message_count += 1
+            messages.append(message)
+
+            # Get message type as string
+            msg_type = getattr(message, "message_type", None)
+            msg_type_str = getattr(msg_type, "value", str(msg_type))
+
+            # Get content with fallback
+            content = getattr(message, "content", "")
+            content_preview = str(content)[:100] if content else ""
+
+            # Progress reporting with debug logging
+            progress_message = f"Qwen #{message_count}: {msg_type_str} => {content}"
+            logger.debug(f"[PROGRESS] {progress_message}")
+            await ctx.report_progress(
+                progress=message_count,
+                total=None,
+                message=progress_message
+            )
+
+            # Categorize messages for summary
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+            elif msg_type_str == "tool_use":
+                tool_uses.append(message.content)
+            elif msg_type_str == "tool_result":
+                tool_uses.append(f"Tool result: {message.content}")
+            elif msg_type_str == "error":
+                logger.error(f"Qwen error: {message.content}")
+                return f"❌ Qwen execution failed: {message.content}"
+            elif msg_type_str == "result":
+                logger.debug(f"Qwen result: {message.content}, not adding to agent_responses")
+            else:
+                # Capture any other message types that might contain useful content
+                if message.content and str(message.content).strip():
+                    agent_responses.append(str(message.content).strip())
+
+        # Create comprehensive summary
+        summary_parts = []
+
+        if agent_responses:
+            if len(agent_responses) == 1:
+                summary_parts.append(f"**Qwen Response:**\n{agent_responses[0]}")
+            else:
+                combined_response = "\n\n".join(agent_responses)
+                summary_parts.append(f"**Qwen Response:**\n{combined_response}")
+
+        if tool_uses:
+            summary_parts.append(f"🔧 **Tools Used ({len(tool_uses)}):**")
+            for tool_use in tool_uses:
+                summary_parts.append(f"• {tool_use}")
+
+        if not summary_parts:
+            summary_parts.append("✅ Qwen task completed successfully (no detailed output captured)")
+
+        summary = "\n\n".join(summary_parts)
+
+        logger.info("Qwen subagent execution completed")
+        logger.debug(f"[MCP-TOOL] Qwen execution completed - total messages: {message_count}, agent_responses: {len(agent_responses)}, tool_uses: {len(tool_uses)}")
+        logger.debug(f"Result summary: {summary}")
+
+        final_response = summary if config.verbose else (agent_responses[-1] if agent_responses else "✅ Qwen task completed successfully")
+        logger.info(f"[TOOL-RESPONSE] Qwen final response: {final_response}")
+        return final_response
+
+    except Exception as e:
+        error_msg = f"Error executing Qwen subagent: {str(e)}"
+        await ctx.error(error_msg)
+        return f"❌ {error_msg}"
+
+
+@server.tool()
 async def test_tool(context: Context,signal: bool = True) -> Any:
     """
     Test the tool.
@@ -1035,10 +1227,10 @@ def main():
 Examples:
   python -m roundtable_mcp_server                    # Start MCP server with auto-detected agents
   python -m roundtable_mcp_server --check            # Check CLI availability
-  python -m roundtable_mcp_server --agents codex,gemini  # Start with specific agents
+  python -m roundtable_mcp_server --agents codex,gemini,qwen  # Start with specific agents
 
 Environment Variables:
-  CLI_MCP_SUBAGENTS          Comma-separated list of subagents (codex,claude,cursor,gemini)
+  CLI_MCP_SUBAGENTS          Comma-separated list of subagents (codex,claude,cursor,gemini,qwen)
   CLI_MCP_WORKING_DIR        Default working directory
   CLI_MCP_DEBUG             Enable debug logging (true/false)
   CLI_MCP_IGNORE_AVAILABILITY  Ignore availability cache (true/false)
@@ -1058,7 +1250,7 @@ Priority Order:
     parser.add_argument(
         "--agents",
         type=str,
-        help="Comma-separated list of agents to enable (codex,claude,cursor,gemini)"
+        help="Comma-separated list of agents to enable (codex,claude,cursor,gemini,qwen)"
     )
 
     args = parser.parse_args()
