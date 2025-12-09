@@ -22,11 +22,12 @@ class TestServerIntegration:
             assert "codex" in server.enabled_subagents
             assert "qwen" in server.enabled_subagents
     
-    def test_all_tools_registered(self):
+    @pytest.mark.asyncio
+    async def test_all_tools_registered(self):
         """Test all expected tools are registered."""
-        # Get registered tools from server
-        tools = server.server._tools
-        tool_names = [tool.name for tool in tools.values()]
+        # Get registered tools from server - FastMCP uses async list_tools()
+        tools_list = await server.server.list_tools()
+        tool_names = [tool.name for tool in tools_list]
         
         # Check availability tools
         assert "check_codex_availability" in tool_names
@@ -42,12 +43,13 @@ class TestServerIntegration:
         assert "gemini_subagent" in tool_names
         assert "qwen_subagent" in tool_names
     
-    def test_tool_count(self):
+    @pytest.mark.asyncio
+    async def test_tool_count(self):
         """Test correct number of tools registered."""
-        tools = server.server._tools
+        tools_list = await server.server.list_tools()
         
         # Should have 10 main tools + test_tool
-        assert len(tools) >= 10
+        assert len(tools_list) >= 10
 
 
 @pytest.mark.integration
