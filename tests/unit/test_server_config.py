@@ -12,7 +12,7 @@ class TestServerConfig:
         """Test default configuration values."""
         config = ServerConfig()
         
-        assert config.subagents == ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity", "factory", "rovo"]
+        assert config.subagents == ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "factory", "rovo"]
         assert config.working_dir is None
         assert config.debug is True
         assert config.verbose is False
@@ -88,5 +88,5 @@ class TestParseConfigFromEnv:
         config = parse_config_from_env()
         
         # Should enable all subagents
-        assert len(config.subagents) == 14
+        assert len(config.subagents) == 13
         assert "qwen" in config.subagents

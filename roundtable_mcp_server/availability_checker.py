@@ -374,7 +374,7 @@ class CLIAvailabilityChecker:
             return_exceptions=True
         )
 
-        cli_names = ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity", "factory", "rovo"]
+        cli_names = ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "factory", "rovo"]
         availability_results = {}
 
         for cli_name, result in zip(cli_names, results):
