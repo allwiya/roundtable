@@ -12,7 +12,7 @@ class TestServerConfig:
         """Test default configuration values."""
         config = ServerConfig()
         
-        assert config.subagents == ["codex", "claude", "cursor", "gemini", "qwen", "kiro"]
+        assert config.subagents == ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot"]
         assert config.working_dir is None
         assert config.debug is True
         assert config.verbose is False
