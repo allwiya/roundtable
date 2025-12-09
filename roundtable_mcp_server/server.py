@@ -103,6 +103,7 @@ try:
     from claudable_helper.cli.adapters.opencode_cli import OpenCodeCLI
     from claudable_helper.cli.adapters.antigravity_cli import AntigravityCLI
     from claudable_helper.cli.adapters.factory_cli import FactoryCLI
+    from claudable_helper.cli.adapters.rovo_cli import RovoCLI
     CLI_ADAPTERS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"CLI adapters not available for direct import: {e}")
@@ -121,7 +122,7 @@ class SubagentConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Configuration for the MCP server."""
     subagents: List[str] = Field(
-        default_factory=lambda: ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity", "factory"],
+        default_factory=lambda: ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity", "factory", "rovo"],
         description="List of subagents to enable"
     )
     working_dir: Optional[str] = Field(
@@ -563,6 +564,21 @@ async def _execute_factory_with_error_handling(instruction: str, project_path: s
     if not agent_responses:
         return "✅ Factory/Droid task completed"
     return f"**Factory/Droid:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Factory/Droid:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_rovo_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    rovo_cli = RovoCLI()
+    availability = await rovo_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Rovo Dev CLI not available")
+    agent_responses = []
+    async for message in rovo_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Rovo Dev task completed"
+    return f"**Rovo Dev:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Rovo Dev:**\n{chr(10).join(agent_responses)}"
 
 
 # Tool definitions
@@ -2058,6 +2074,50 @@ async def factory_subagent(instruction: str, project_path: Optional[str] = None,
         if not agent_responses:
             return "✅ Factory/Droid task completed"
         return f"**Factory/Droid:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Factory/Droid:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_rovo_availability(ctx: Context = None) -> str:
+    if "rovo" not in enabled_subagents:
+        return "❌ Rovo Dev subagent is not enabled"
+    try:
+        check_rovo = _import_module_item("cli_subagent", "check_rovo_availability")
+        return await check_rovo()
+    except Exception as e:
+        return f"❌ Error checking Rovo Dev: {str(e)}"
+
+@server.tool()
+async def rovo_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "rovo" not in enabled_subagents:
+        return "❌ Rovo Dev subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_rovo_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Rovo Dev CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "rovo", instruction)
+    try:
+        rovo_cli = RovoCLI()
+        availability = await rovo_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Rovo Dev CLI not available"
+        agent_responses = []
+        async for message in rovo_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Rovo Dev task completed"
+        return f"**Rovo Dev:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Rovo Dev:**\n{chr(10).join(agent_responses)}"
     except Exception as e:
         return f"❌ Error: {str(e)}"
 

@@ -338,6 +338,19 @@ class CLIAvailabilityChecker:
         except Exception as e:
             return {"available": False, "status": f"❌ Factory/Droid CLI error: {str(e)}", "last_checked": datetime.now().isoformat(), "error": str(e)}
 
+
+    async def check_rovo_availability(self) -> Dict[str, Any]:
+        """Check if Rovo Dev CLI is available."""
+        try:
+            proc = await asyncio.create_subprocess_shell("acli rovodev --help", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                return {"available": True, "status": "✅ Rovo Dev CLI Available", "last_checked": datetime.now().isoformat(), "error": None}
+            else:
+                return {"available": False, "status": f"❌ Rovo Dev CLI failed", "last_checked": datetime.now().isoformat(), "error": stderr.decode() if stderr else None}
+        except Exception as e:
+            return {"available": False, "status": f"❌ Rovo Dev CLI error: {str(e)}", "last_checked": datetime.now().isoformat(), "error": str(e)}
+
     async def check_all_availability(self) -> Dict[str, Dict[str, Any]]:
         """Check availability of all CLI tools."""
         logger.info("Starting CLI availability check...")
@@ -357,10 +370,11 @@ class CLIAvailabilityChecker:
             self.check_opencode_availability(),
             self.check_antigravity_availability(),
             self.check_factory_availability(),
+            self.check_rovo_availability(),
             return_exceptions=True
         )
 
-        cli_names = ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity", "factory"]
+        cli_names = ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity", "factory", "rovo"]
         availability_results = {}
 
         for cli_name, result in zip(cli_names, results):
