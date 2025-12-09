@@ -16,6 +16,7 @@ from claudable_helper.cli.adapters.codex_cli import CodexCLI
 from claudable_helper.cli.adapters.claude_code import ClaudeCodeCLI
 from claudable_helper.cli.adapters.cursor_agent import CursorAgentCLI
 from claudable_helper.cli.adapters.gemini_cli import GeminiCLI
+from claudable_helper.cli.adapters.qwen_cli import QwenCLI
 from claudable_helper.core.terminal_ui import ui
 from claudable_helper.models.messages import Message
 
@@ -25,6 +26,7 @@ _codex_cli = None
 _claude_cli = None
 _cursor_cli = None
 _gemini_cli = None
+_qwen_cli = None
 
 
 def _check_claude_code_sdk() -> tuple[bool, str]:
@@ -80,6 +82,14 @@ async def get_gemini_cli() -> GeminiCLI:
     if _gemini_cli is None:
         _gemini_cli = GeminiCLI()
     return _gemini_cli
+
+
+async def get_qwen_cli() -> QwenCLI:
+    """Get or create a QwenCLI instance."""
+    global _qwen_cli
+    if _qwen_cli is None:
+        _qwen_cli = QwenCLI()
+    return _qwen_cli
 
 
 @tool(
@@ -744,6 +754,145 @@ async def gemini_subagent(
     except Exception as e:
         error_msg = f"Gemini subagent execution failed: {str(e)}"
         ui.error(error_msg, "GeminiSubagent")
+        return f"❌ {error_msg}"
+
+
+@tool(
+    name="qwen_subagent",
+    description="""Execute a coding task using Qwen CLI agent.
+
+    This tool runs a Qwen CLI instance to perform complex coding tasks autonomously.
+    Qwen has access to file operations, shell commands, web search, and can make
+    code changes directly. It's ideal for implementing features, fixing bugs,
+    refactoring code, and other development tasks.
+
+    The tool will stream back the agent's progress and any code changes made.
+    """
+)
+async def qwen_subagent(
+    instruction: str,
+    project_path: Optional[str] = None,
+    session_id: Optional[str] = None,
+    model: Optional[str] = None,
+    images: Optional[List[Dict[str, Any]]] = None,
+    is_initial_prompt: bool = False
+) -> str:
+    """Execute a coding task using Qwen CLI agent.
+
+    Args:
+        instruction: The coding task or instruction to execute
+        project_path: Path to the project directory where work should be done
+        session_id: Optional session ID for conversation continuity
+        model: Optional model to use (e.g., 'qwen-max', 'qwen-plus')
+        images: Optional list of image data for visual tasks
+        is_initial_prompt: Whether this is the first prompt in a new session
+
+    Returns:
+        Summary of what the Qwen agent accomplished
+    """
+    try:
+        # Get Qwen CLI instance
+        qwen_cli = await get_qwen_cli()
+
+        # Check if Qwen is available
+        availability = await qwen_cli.check_availability()
+        if not availability.get("available", False):
+            error_msg = availability.get("error", "Qwen CLI not available")
+            ui.error(f"Qwen unavailable: {error_msg}", "QwenSubagent")
+            return f"❌ Qwen CLI not available: {error_msg}"
+
+        # Robust path validation and fallback
+        if not project_path or project_path.strip() == "":
+            project_path = str(Path.cwd().absolute())
+            ui.debug(f"Using fallback directory: {project_path}", "QwenSubagent")
+        else:
+            # Ensure we have an absolute path
+            project_path = str(Path(project_path).absolute())
+            ui.debug(f"Using provided project path: {project_path}", "QwenSubagent")
+
+        # Validate the directory exists
+        if not Path(project_path).exists():
+            error_msg = f"Project directory does not exist: {project_path}"
+            ui.error(error_msg, "QwenSubagent")
+            return f"❌ {error_msg}"
+
+        ui.info(f"Starting Qwen subagent task: {instruction[:50]}...", "QwenSubagent")
+
+        # Collect all messages from streaming execution
+        messages = []
+        agent_responses = []
+        tool_uses = []
+
+        async for message in qwen_cli.execute_with_streaming(
+            instruction=instruction,
+            project_path=project_path,
+            session_id=session_id,
+            model=model,
+            images=images,
+            is_initial_prompt=is_initial_prompt
+        ):
+            messages.append(message)
+
+            # Debug: Print all message details to understand structure
+            ui.debug(f"Message received - Type: {message.message_type}, Role: {getattr(message, 'role', 'N/A')}, Content preview: {str(message.content)[:100]}...", "QwenSubagent")
+
+            # Categorize messages for summary - be more permissive
+            msg_type = getattr(message, "message_type", None)
+            msg_type_str = getattr(msg_type, "value", msg_type)
+
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+                    ui.debug(f"Captured assistant response: {len(message.content)} chars", "QwenSubagent")
+            elif msg_type_str == "tool_use":
+                tool_uses.append(message.content)
+                ui.debug(f"Captured tool use: {message.content}", "QwenSubagent")
+            elif msg_type_str == "tool_result":
+                tool_uses.append(f"Tool result: {message.content}")
+                ui.debug(f"Captured tool result: {str(message.content)[:50]}...", "QwenSubagent")
+            elif msg_type_str == "error":
+                ui.error(f"Qwen error: {message.content}", "QwenSubagent")
+                return f"❌ Qwen execution failed: {message.content}"
+            else:
+                # Capture any other message types that might contain useful content
+                if message.content and str(message.content).strip():
+                    agent_responses.append(str(message.content).strip())
+                    ui.debug(f"Captured other message type '{msg_type_str}': {str(message.content)[:50]}...", "QwenSubagent")
+
+        # Create comprehensive summary
+        summary_parts = []
+
+        ui.debug(f"Processing summary - Agent responses: {len(agent_responses)}, Tool uses: {len(tool_uses)}", "QwenSubagent")
+
+        if agent_responses:
+            # Combine all responses, not just the longest one
+            if len(agent_responses) == 1:
+                summary_parts.append(f"🤖 **Qwen Agent Response:**\n{agent_responses[0]}")
+            else:
+                # If multiple responses, combine them intelligently
+                combined_response = "\n\n".join(agent_responses)
+                summary_parts.append(f"🤖 **Qwen Agent Response:**\n{combined_response}")
+            ui.debug(f"Added agent response to summary: {len(agent_responses)} responses", "QwenSubagent")
+
+        if tool_uses:
+            summary_parts.append(f"🔧 **Tools Used ({len(tool_uses)}):**")
+            for tool_use in tool_uses:
+                summary_parts.append(f"• {tool_use}")
+            ui.debug(f"Added tool uses to summary: {len(tool_uses)} tools", "QwenSubagent")
+
+        if not summary_parts:
+            ui.warning("No responses or tool uses captured - this might indicate an issue", "QwenSubagent")
+            summary_parts.append("✅ Qwen task completed successfully (no detailed output captured)")
+
+        summary = "\n\n".join(summary_parts)
+        ui.debug(f"Final summary length: {len(summary)} characters", "QwenSubagent")
+
+        ui.success(f"Qwen subagent completed task", "QwenSubagent")
+        return summary
+
+    except Exception as e:
+        error_msg = f"Qwen subagent execution failed: {str(e)}"
+        ui.error(error_msg, "QwenSubagent")
         return f"❌ {error_msg}"
 
 
