@@ -97,6 +97,11 @@ try:
     from claudable_helper.cli.adapters.qwen_cli import QwenCLI
     from claudable_helper.cli.adapters.kiro_cli import KiroCLI
     from claudable_helper.cli.adapters.copilot_cli import CopilotCLI
+    from claudable_helper.cli.adapters.grok_cli import GrokCLI
+    from claudable_helper.cli.adapters.kilocode_cli import KilocodeCLI
+    from claudable_helper.cli.adapters.crush_cli import CrushCLI
+    from claudable_helper.cli.adapters.opencode_cli import OpenCodeCLI
+    from claudable_helper.cli.adapters.antigravity_cli import AntigravityCLI
     CLI_ADAPTERS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"CLI adapters not available for direct import: {e}")
@@ -115,7 +120,7 @@ class SubagentConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Configuration for the MCP server."""
     subagents: List[str] = Field(
-        default_factory=lambda: ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot"],
+        default_factory=lambda: ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity"],
         description="List of subagents to enable"
     )
     working_dir: Optional[str] = Field(
@@ -465,6 +470,83 @@ async def _execute_copilot_with_error_handling(
         return "✅ GitHub Copilot task completed successfully"
     
     return f"**GitHub Copilot Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**GitHub Copilot Response:**\n{chr(10).join(agent_responses)}"
+
+
+
+
+async def _execute_grok_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    grok_cli = GrokCLI()
+    availability = await grok_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Grok CLI not available")
+    agent_responses = []
+    async for message in grok_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Grok task completed"
+    return f"**Grok:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Grok:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_kilocode_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    kilocode_cli = KilocodeCLI()
+    availability = await kilocode_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Kilocode CLI not available")
+    agent_responses = []
+    async for message in kilocode_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Kilocode task completed"
+    return f"**Kilocode:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Kilocode:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_crush_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    crush_cli = CrushCLI()
+    availability = await crush_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Crush CLI not available")
+    agent_responses = []
+    async for message in crush_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Crush task completed"
+    return f"**Crush:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Crush:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_opencode_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    opencode_cli = OpenCodeCLI()
+    availability = await opencode_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"OpenCode CLI not available")
+    agent_responses = []
+    async for message in opencode_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ OpenCode task completed"
+    return f"**OpenCode:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**OpenCode:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_antigravity_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    antigravity_cli = AntigravityCLI()
+    availability = await antigravity_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Antigravity CLI not available")
+    agent_responses = []
+    async for message in antigravity_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Antigravity task completed"
+    return f"**Antigravity:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Antigravity:**\n{chr(10).join(agent_responses)}"
 
 
 # Tool definitions
@@ -1694,6 +1776,228 @@ async def copilot_subagent(
 
         return f"**GitHub Copilot:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**GitHub Copilot:**\n{chr(10).join(agent_responses)}"
 
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+
+
+@server.tool()
+async def check_grok_availability(ctx: Context = None) -> str:
+    if "grok" not in enabled_subagents:
+        return "❌ Grok subagent is not enabled"
+    try:
+        check_grok = _import_module_item("cli_subagent", "check_grok_availability")
+        return await check_grok()
+    except Exception as e:
+        return f"❌ Error checking Grok: {str(e)}"
+
+@server.tool()
+async def grok_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "grok" not in enabled_subagents:
+        return "❌ Grok subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_grok_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Grok CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "grok", instruction)
+    try:
+        grok_cli = GrokCLI()
+        availability = await grok_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Grok CLI not available"
+        agent_responses = []
+        async for message in grok_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Grok task completed"
+        return f"**Grok:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Grok:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_kilocode_availability(ctx: Context = None) -> str:
+    if "kilocode" not in enabled_subagents:
+        return "❌ Kilocode subagent is not enabled"
+    try:
+        check_kilocode = _import_module_item("cli_subagent", "check_kilocode_availability")
+        return await check_kilocode()
+    except Exception as e:
+        return f"❌ Error checking Kilocode: {str(e)}"
+
+@server.tool()
+async def kilocode_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "kilocode" not in enabled_subagents:
+        return "❌ Kilocode subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_kilocode_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Kilocode CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "kilocode", instruction)
+    try:
+        kilocode_cli = KilocodeCLI()
+        availability = await kilocode_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Kilocode CLI not available"
+        agent_responses = []
+        async for message in kilocode_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Kilocode task completed"
+        return f"**Kilocode:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Kilocode:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_crush_availability(ctx: Context = None) -> str:
+    if "crush" not in enabled_subagents:
+        return "❌ Crush subagent is not enabled"
+    try:
+        check_crush = _import_module_item("cli_subagent", "check_crush_availability")
+        return await check_crush()
+    except Exception as e:
+        return f"❌ Error checking Crush: {str(e)}"
+
+@server.tool()
+async def crush_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "crush" not in enabled_subagents:
+        return "❌ Crush subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_crush_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Crush CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "crush", instruction)
+    try:
+        crush_cli = CrushCLI()
+        availability = await crush_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Crush CLI not available"
+        agent_responses = []
+        async for message in crush_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Crush task completed"
+        return f"**Crush:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Crush:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_opencode_availability(ctx: Context = None) -> str:
+    if "opencode" not in enabled_subagents:
+        return "❌ OpenCode subagent is not enabled"
+    try:
+        check_opencode = _import_module_item("cli_subagent", "check_opencode_availability")
+        return await check_opencode()
+    except Exception as e:
+        return f"❌ Error checking OpenCode: {str(e)}"
+
+@server.tool()
+async def opencode_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "opencode" not in enabled_subagents:
+        return "❌ OpenCode subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_opencode_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ OpenCode CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "opencode", instruction)
+    try:
+        opencode_cli = OpenCodeCLI()
+        availability = await opencode_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ OpenCode CLI not available"
+        agent_responses = []
+        async for message in opencode_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ OpenCode task completed"
+        return f"**OpenCode:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**OpenCode:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_antigravity_availability(ctx: Context = None) -> str:
+    if "antigravity" not in enabled_subagents:
+        return "❌ Antigravity subagent is not enabled"
+    try:
+        check_antigravity = _import_module_item("cli_subagent", "check_antigravity_availability")
+        return await check_antigravity()
+    except Exception as e:
+        return f"❌ Error checking Antigravity: {str(e)}"
+
+@server.tool()
+async def antigravity_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "antigravity" not in enabled_subagents:
+        return "❌ Antigravity subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_antigravity_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Antigravity CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "antigravity", instruction)
+    try:
+        antigravity_cli = AntigravityCLI()
+        availability = await antigravity_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Antigravity CLI not available"
+        agent_responses = []
+        async for message in antigravity_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Antigravity task completed"
+        return f"**Antigravity:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Antigravity:**\n{chr(10).join(agent_responses)}"
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
