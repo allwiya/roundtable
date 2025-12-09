@@ -95,6 +95,7 @@ try:
     from claudable_helper.cli.adapters.cursor_agent import CursorAgentCLI
     from claudable_helper.cli.adapters.gemini_cli import GeminiCLI
     from claudable_helper.cli.adapters.qwen_cli import QwenCLI
+    from claudable_helper.cli.adapters.kiro_cli import KiroCLI
     CLI_ADAPTERS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"CLI adapters not available for direct import: {e}")
@@ -113,7 +114,7 @@ class SubagentConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Configuration for the MCP server."""
     subagents: List[str] = Field(
-        default_factory=lambda: ["codex", "claude", "cursor", "gemini", "qwen"],
+        default_factory=lambda: ["codex", "claude", "cursor", "gemini", "qwen", "kiro"],
         description="List of subagents to enable"
     )
     working_dir: Optional[str] = Field(
@@ -398,6 +399,40 @@ async def _execute_qwen_with_error_handling(
     return f"**Qwen Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Qwen Response:**\n{chr(10).join(agent_responses)}"
 
 
+async def _execute_kiro_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute Kiro with error handling."""
+    kiro_cli = KiroCLI()
+    
+    availability = await kiro_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Kiro CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    
+    async for message in kiro_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Kiro task completed successfully"
+    
+    return f"**Kiro Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Kiro Response:**\n{chr(10).join(agent_responses)}"
+
+
 # Tool definitions
 @server.tool()
 async def check_codex_availability(ctx: Context = None) -> str:
@@ -515,6 +550,30 @@ async def check_qwen_availability(ctx: Context = None) -> str:
         return result
     except Exception as e:
         error_msg = f"Error checking Qwen availability: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return f"❌ {error_msg}"
+
+
+@server.tool()
+async def check_kiro_availability(ctx: Context = None) -> str:
+    """
+    Check if Kiro CLI is available and configured properly.
+
+    Returns:
+        Status message about Kiro availability
+    """
+    if "kiro" not in enabled_subagents:
+        return "❌ Kiro subagent is not enabled in this server instance"
+
+    logger.info("Checking Kiro availability")
+
+    try:
+        check_kiro = _import_module_item("cli_subagent", "check_kiro_availability")
+        result = await check_kiro()
+        logger.debug(f"Kiro availability result: {result}")
+        return result
+    except Exception as e:
+        error_msg = f"Error checking Kiro availability: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return f"❌ {error_msg}"
 
@@ -1424,6 +1483,110 @@ async def qwen_subagent(
 
     except Exception as e:
         error_msg = f"Error executing Qwen subagent: {str(e)}"
+        await ctx.error(error_msg)
+        return f"❌ {error_msg}"
+
+
+@server.tool()
+async def kiro_subagent(
+    instruction: str,
+    project_path: Optional[str] = None,
+    session_id: Optional[str] = None,
+    model: Optional[str] = None,
+    is_initial_prompt: bool = False,
+    ctx: Context = None
+) -> str:
+    """
+    Execute a coding task using Kiro CLI agent.
+
+    Kiro has access to file operations, shell commands, web search,
+    and can make code changes directly.
+
+    Args:
+        instruction: The coding task or instruction to execute
+        project_path: ABSOLUTE path to the project directory
+        session_id: Optional session ID for conversation continuity
+        model: Optional model to use
+        is_initial_prompt: Whether this is the first prompt in a new session
+
+    Returns:
+        Summary of what the Kiro agent accomplished
+    """
+    if "kiro" not in enabled_subagents:
+        return "❌ Kiro subagent is not enabled in this server instance"
+
+    if not CLI_ADAPTERS_AVAILABLE:
+        try:
+            kiro_exec = _import_module_item("cli_subagent", "kiro_subagent")
+            result = await kiro_exec(
+                instruction=instruction,
+                project_path=project_path,
+                session_id=session_id,
+                model=model,
+                images=None,
+                is_initial_prompt=is_initial_prompt
+            )
+            return result
+        except Exception as e:
+            error_msg = f"Error executing Kiro subagent: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return f"❌ {error_msg}"
+
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+        logger.debug(f"Using fallback directory: {project_path}")
+    else:
+        project_path = str(Path(project_path).absolute())
+        logger.debug(f"Using provided project path: {project_path}")
+
+    if not Path(project_path).exists():
+        error_msg = f"Project directory does not exist: {project_path}"
+        logger.error(error_msg)
+        return f"❌ {error_msg}"
+
+    logger.info(f"Kiro: {model} [INSTRUCTION]: {instruction}")
+    logger.debug(f"[MCP-TOOL] kiro_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
+
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_kiro_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Kiro CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Kiro execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "kiro", instruction)
+
+    try:
+        kiro_cli = KiroCLI()
+        availability = await kiro_cli.check_availability()
+        if not availability.get("available", False):
+            error_msg = availability.get("error", "Kiro CLI not available")
+            logger.error(f"Kiro unavailable: {error_msg}")
+            return f"❌ Kiro CLI not available: {error_msg}"
+
+        agent_responses = []
+        async for message in kiro_cli.execute_with_streaming(
+            instruction=instruction,
+            project_path=project_path,
+            session_id=session_id,
+            model=model,
+            images=None,
+            is_initial_prompt=is_initial_prompt
+        ):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+
+        if not agent_responses:
+            return "✅ Kiro task completed successfully"
+
+        return f"**Kiro Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Kiro Response:**\n{chr(10).join(agent_responses)}"
+
+    except Exception as e:
+        error_msg = f"Error executing Kiro subagent: {str(e)}"
         await ctx.error(error_msg)
         return f"❌ {error_msg}"
 
