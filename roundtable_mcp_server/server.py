@@ -96,6 +96,7 @@ try:
     from claudable_helper.cli.adapters.gemini_cli import GeminiCLI
     from claudable_helper.cli.adapters.qwen_cli import QwenCLI
     from claudable_helper.cli.adapters.kiro_cli import KiroCLI
+    from claudable_helper.cli.adapters.copilot_cli import CopilotCLI
     CLI_ADAPTERS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"CLI adapters not available for direct import: {e}")
@@ -114,7 +115,7 @@ class SubagentConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Configuration for the MCP server."""
     subagents: List[str] = Field(
-        default_factory=lambda: ["codex", "claude", "cursor", "gemini", "qwen", "kiro"],
+        default_factory=lambda: ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot"],
         description="List of subagents to enable"
     )
     working_dir: Optional[str] = Field(
@@ -431,6 +432,39 @@ async def _execute_kiro_with_error_handling(
         return "✅ Kiro task completed successfully"
     
     return f"**Kiro Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Kiro Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_copilot_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute GitHub Copilot with error handling."""
+    copilot_cli = CopilotCLI()
+    
+    availability = await copilot_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"GitHub Copilot CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    async for message in copilot_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ GitHub Copilot task completed successfully"
+    
+    return f"**GitHub Copilot Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**GitHub Copilot Response:**\n{chr(10).join(agent_responses)}"
 
 
 # Tool definitions
@@ -1589,6 +1623,79 @@ async def kiro_subagent(
         error_msg = f"Error executing Kiro subagent: {str(e)}"
         await ctx.error(error_msg)
         return f"❌ {error_msg}"
+
+
+@server.tool()
+async def check_copilot_availability(ctx: Context = None) -> str:
+    """Check if GitHub Copilot CLI is available."""
+    if "copilot" not in enabled_subagents:
+        return "❌ GitHub Copilot subagent is not enabled"
+
+    try:
+        check_copilot = _import_module_item("cli_subagent", "check_copilot_availability")
+        result = await check_copilot()
+        return result
+    except Exception as e:
+        return f"❌ Error checking GitHub Copilot: {str(e)}"
+
+
+@server.tool()
+async def copilot_subagent(
+    instruction: str,
+    project_path: Optional[str] = None,
+    session_id: Optional[str] = None,
+    model: Optional[str] = None,
+    is_initial_prompt: bool = False,
+    ctx: Context = None
+) -> str:
+    """Execute a coding task using GitHub Copilot CLI agent."""
+    if "copilot" not in enabled_subagents:
+        return "❌ GitHub Copilot subagent is not enabled"
+
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_copilot_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ GitHub Copilot CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "copilot", instruction)
+
+    try:
+        copilot_cli = CopilotCLI()
+        availability = await copilot_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ GitHub Copilot CLI not available"
+
+        agent_responses = []
+        async for message in copilot_cli.execute_with_streaming(
+            instruction=instruction,
+            project_path=project_path,
+            session_id=session_id,
+            model=model,
+            images=None,
+            is_initial_prompt=is_initial_prompt
+        ):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+
+        if not agent_responses:
+            return "✅ GitHub Copilot task completed"
+
+        return f"**GitHub Copilot:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**GitHub Copilot:**\n{chr(10).join(agent_responses)}"
+
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
 
 
 @server.tool()
