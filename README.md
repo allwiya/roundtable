@@ -997,6 +997,12 @@ export CLI_MCP_IGNORE_AVAILABILITY=true
 
 # Enable debug logging
 export CLI_MCP_DEBUG=true
+
+# Enable verbose output
+export CLI_MCP_VERBOSE=true
+
+# Enable metrics collection (OPTIONAL)
+export CLI_MCP_METRICS=true
 ```
 
 ### Command Line Options
