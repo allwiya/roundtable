@@ -72,13 +72,13 @@ class KiroCLI(BaseCLI):
         cli_model = self._get_cli_model_name(model)
         project_path = str(Path(project_path).absolute())
 
-        # Build command
+        # Build command - Kiro uses current directory, no --project-path flag
         cmd = [
             "kiro-cli",
             "chat",
+            "--no-interactive",
+            "--trust-all-tools",
             instruction,
-            "--project-path",
-            project_path,
         ]
 
         if cli_model:
@@ -91,7 +91,7 @@ class KiroCLI(BaseCLI):
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=project_path,
+                cwd=project_path,  # Set working directory here
             )
 
             # Stream stdout

@@ -655,7 +655,11 @@ class CodexCLI(BaseCLI):
                 return None
 
             # Return the most recent file (same as codex_chat.py "latest" logic)
-            latest_file = candidates[0]
+            latest_file = candidates[0] if candidates else None
+            if not latest_file:
+                ui.debug(f"No valid rollout file found for project {project_id}", "Codex")
+                return None
+                
             rollout_path = str(latest_file.resolve())
 
             ui.debug(
