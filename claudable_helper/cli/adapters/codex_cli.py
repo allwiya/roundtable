@@ -105,6 +105,7 @@ class CodexCLI(BaseCLI):
 
         cmd = [
             "codex",
+            "--skip-git-repo-check",
             "--cd",
             workdir_abs,
             "proto",
