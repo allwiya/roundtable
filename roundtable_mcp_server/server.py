@@ -161,7 +161,7 @@ def parse_config_from_env() -> ServerConfig:
     if subagents_env:
         # Environment variable override - use specified subagents
         subagents = [s.strip().lower() for s in subagents_env.split(",") if s.strip()]
-        valid_subagents = {"codex", "claude", "cursor", "gemini", "qwen"}
+        valid_subagents = {"codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity", "factory", "rovo"}
         config.subagents = [s for s in subagents if s in valid_subagents]
         config.verbose = os.getenv("CLI_MCP_VERBOSE", "false").lower() in ("true", "1", "yes", "on")
         logger.info(f"Verbose: {config.verbose}")
@@ -172,7 +172,7 @@ def parse_config_from_env() -> ServerConfig:
         logger.info(f"Using subagents from environment variable: {config.subagents}")
     elif ignore_availability:
         # Ignore availability cache and enable all subagents
-        config.subagents = ["codex", "claude", "cursor", "gemini", "qwen"]
+        config.subagents = ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity", "factory", "rovo"]
         logger.info("Ignoring availability cache - enabling all subagents")
     else:
         # Use availability cache to determine enabled subagents
@@ -186,7 +186,7 @@ def parse_config_from_env() -> ServerConfig:
             # Fallback to default if no availability data
             logger.warning("No availability data found, falling back to default subagents")
             logger.warning("Run 'python -m roundtable_mcp_server.availability_checker --check' to check CLI availability")
-            config.subagents = ["codex", "claude", "cursor", "gemini", "qwen"]
+            config.subagents = ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity", "factory", "rovo"]
 
     # Parse working directory
     working_dir = os.getenv("CLI_MCP_WORKING_DIR")

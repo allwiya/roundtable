@@ -44,6 +44,7 @@ class TestCLIAvailabilityChecker:
         
         result = checker.get_available_clis()
         
+        # When no cache exists, returns empty list
         assert result == []
     
     # NOTE: save_availability method doesn't exist in current implementation

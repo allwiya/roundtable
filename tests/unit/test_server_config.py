@@ -88,5 +88,5 @@ class TestParseConfigFromEnv:
         config = parse_config_from_env()
         
         # Should enable all subagents
-        assert len(config.subagents) == 5
+        assert len(config.subagents) == 14
         assert "qwen" in config.subagents
