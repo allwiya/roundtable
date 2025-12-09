@@ -1,6 +1,9 @@
 # Roundtable AI MCP Server
 
 [![PyPI version](https://badge.fury.io/py/roundtable-ai.svg)](https://badge.fury.io/py/roundtable-ai)
+[![Tests](https://github.com/allwiya/roundtable/actions/workflows/test.yml/badge.svg)](https://github.com/allwiya/roundtable/actions/workflows/test.yml)
+[![CodeQL](https://github.com/allwiya/roundtable/actions/workflows/codeql.yml/badge.svg)](https://github.com/allwiya/roundtable/actions/workflows/codeql.yml)
+[![codecov](https://codecov.io/gh/allwiya/roundtable/branch/main/graph/badge.svg)](https://codecov.io/gh/allwiya/roundtable)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
@@ -11,7 +14,7 @@ Stop copy-pasting between AI models. Roundtable AI is a local MCP server that le
 **Key Features:**
 - **Context Continuity**: Shared project context across all sub-agents
 - **Parallel Execution**: All agents work simultaneously
-- **Model Specialization**: Right AI for each task (Gemini's 1M context, Claude's reasoning, Codex's implementation)
+- **Model Specialization**: Right AI for each task (Gemini's 1M context, Claude's reasoning, Codex's implementation, Qwen's code generation)
 - **Zero Markup**: Uses your existing CLI tools and API subscriptions
 - **26+ IDE Support**: Works with Claude Code, Cursor, VS Code, JetBrains, and more
 
@@ -41,12 +44,12 @@ roundtable-ai --check
 roundtable-ai
 
 # Use specific assistants only
-roundtable-ai --agents codex,claude
+roundtable-ai --agents codex,claude,qwen
 ```
 
 **One-liner for Claude Code:**
 ```bash
-claude mcp add roundtable-ai -- roundtable-ai --agents gemini,claude,codex,cursor
+claude mcp add roundtable-ai -- roundtable-ai --agents gemini,claude,codex,cursor,qwen
 ```
 
 **Try this multi-agent prompt in your IDE:**
@@ -474,6 +477,7 @@ Roundtable AI integrates with **26+ different IDEs and AI coding tools**:
 
 #### GitHub Copilot
 
+**Standard Configuration** (recommended):
 ```json
 {
   "github.copilot.mcp.servers": {
@@ -486,6 +490,22 @@ Roundtable AI integrates with **26+ different IDEs and AI coding tools**:
   }
 }
 ```
+
+**Alternative Configuration** (if ENV variables don't work):
+```json
+{
+  "github.copilot.mcp.servers": {
+    "roundtable-ai": {
+      "command": "roundtable-ai",
+      "args": [
+        "--agents=codex,claude,cursor,gemini"
+      ]
+    }
+  }
+}
+```
+
+> **Note**: GitHub Copilot CLI has a known bug with environment variables. If the standard configuration doesn't work, use the alternative format with `args` instead of `env`.
 
 ---
 
@@ -994,6 +1014,12 @@ export CLI_MCP_IGNORE_AVAILABILITY=true
 
 # Enable debug logging
 export CLI_MCP_DEBUG=true
+
+# Enable verbose output
+export CLI_MCP_VERBOSE=true
+
+# Enable metrics collection (OPTIONAL)
+export CLI_MCP_METRICS=true
 ```
 
 ### Command Line Options
@@ -1016,6 +1042,50 @@ Options:
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+### Development Setup
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/roundtable.git
+cd roundtable
+
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Or use the setup script
+./scripts/setup-dev.sh
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov --cov-report=html
+
+# Run specific test types
+pytest -m unit          # Unit tests only
+pytest -m integration   # Integration tests only
+
+# Run specific test file
+pytest tests/unit/test_server_config.py
+```
+
+### Code Quality
+
+```bash
+# Format code
+black .
+
+# Lint code
+ruff check .
+
+# Type checking
+mypy roundtable_mcp_server
+```
 
 ## License
 

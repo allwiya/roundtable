@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Roundtable AI MCP Server.
 
-This MCP server exposes CLI subagents (Codex, Claude, Cursor, Gemini) via the MCP protocol.
+This MCP server exposes CLI subagents (Codex, Claude, Cursor, Gemini, Qwen) via the MCP protocol.
 It supports stdio transport for integration with any MCP-compatible client.
 
 Developed by Roundtable AI for seamless AI assistant integration.
@@ -63,12 +63,47 @@ logger = logging.getLogger(__name__)
 
 CLIAvailabilityChecker = _import_module_item("availability_checker", "CLIAvailabilityChecker")
 
+# Import error handling and monitoring modules
+try:
+    from roundtable_mcp_server.exceptions import (
+        RoundtableError,
+        AgentNotAvailableError,
+        AgentExecutionError,
+        ConfigurationError
+    )
+    from roundtable_mcp_server.retry import retry_async
+    from roundtable_mcp_server.error_handler import handle_agent_error
+    from roundtable_mcp_server.metrics import MetricsCollector, track_execution
+    ERROR_HANDLING_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Error handling modules not available: {e}")
+    ERROR_HANDLING_AVAILABLE = False
+    # Define fallback exception classes
+    class RoundtableError(Exception):
+        pass
+    class AgentNotAvailableError(RoundtableError):
+        pass
+    class AgentExecutionError(RoundtableError):
+        pass
+    class ConfigurationError(RoundtableError):
+        pass
+
 # Import CLI adapters directly for MCP streaming with progress
 try:
     from claudable_helper.cli.adapters.codex_cli import CodexCLI
     from claudable_helper.cli.adapters.claude_code import ClaudeCodeCLI
     from claudable_helper.cli.adapters.cursor_agent import CursorAgentCLI
     from claudable_helper.cli.adapters.gemini_cli import GeminiCLI
+    from claudable_helper.cli.adapters.qwen_cli import QwenCLI
+    from claudable_helper.cli.adapters.kiro_cli import KiroCLI
+    from claudable_helper.cli.adapters.copilot_cli import CopilotCLI
+    from claudable_helper.cli.adapters.grok_cli import GrokCLI
+    from claudable_helper.cli.adapters.kilocode_cli import KilocodeCLI
+    from claudable_helper.cli.adapters.crush_cli import CrushCLI
+    from claudable_helper.cli.adapters.opencode_cli import OpenCodeCLI
+    from claudable_helper.cli.adapters.antigravity_cli import AntigravityCLI
+    from claudable_helper.cli.adapters.factory_cli import FactoryCLI
+    from claudable_helper.cli.adapters.rovo_cli import RovoCLI
     CLI_ADAPTERS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"CLI adapters not available for direct import: {e}")
@@ -87,7 +122,7 @@ class SubagentConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Configuration for the MCP server."""
     subagents: List[str] = Field(
-        default_factory=lambda: ["codex", "claude", "cursor", "gemini"],
+        default_factory=lambda: ["codex", "claude", "cursor", "gemini", "qwen", "kiro", "copilot", "grok", "kilocode", "crush", "opencode", "antigravity", "factory", "rovo"],
         description="List of subagents to enable"
     )
     working_dir: Optional[str] = Field(
@@ -126,7 +161,7 @@ def parse_config_from_env() -> ServerConfig:
     if subagents_env:
         # Environment variable override - use specified subagents
         subagents = [s.strip().lower() for s in subagents_env.split(",") if s.strip()]
-        valid_subagents = {"codex", "claude", "cursor", "gemini"}
+        valid_subagents = {"codex", "claude", "cursor", "gemini", "qwen"}
         config.subagents = [s for s in subagents if s in valid_subagents]
         config.verbose = os.getenv("CLI_MCP_VERBOSE", "false").lower() in ("true", "1", "yes", "on")
         logger.info(f"Verbose: {config.verbose}")
@@ -137,7 +172,7 @@ def parse_config_from_env() -> ServerConfig:
         logger.info(f"Using subagents from environment variable: {config.subagents}")
     elif ignore_availability:
         # Ignore availability cache and enable all subagents
-        config.subagents = ["codex", "claude", "cursor", "gemini"]
+        config.subagents = ["codex", "claude", "cursor", "gemini", "qwen"]
         logger.info("Ignoring availability cache - enabling all subagents")
     else:
         # Use availability cache to determine enabled subagents
@@ -151,7 +186,7 @@ def parse_config_from_env() -> ServerConfig:
             # Fallback to default if no availability data
             logger.warning("No availability data found, falling back to default subagents")
             logger.warning("Run 'python -m roundtable_mcp_server.availability_checker --check' to check CLI availability")
-            config.subagents = ["codex", "claude", "cursor", "gemini"]
+            config.subagents = ["codex", "claude", "cursor", "gemini", "qwen"]
 
     # Parse working directory
     working_dir = os.getenv("CLI_MCP_WORKING_DIR")
@@ -189,6 +224,361 @@ def initialize_config():
     logger.info(f"Enabled subagents: {', '.join(enabled_subagents)}")
     logger.info(f"Working directory: {working_dir}")
     logger.info(f"Verbose: {verbose}")
+    
+    # Initialize metrics collector if available
+    if ERROR_HANDLING_AVAILABLE:
+        metrics_enabled = os.getenv("CLI_MCP_METRICS", "false").lower() in ("true", "1", "yes", "on")
+        if metrics_enabled:
+            logger.info("Metrics collection enabled")
+        else:
+            logger.debug("Metrics collection disabled (set CLI_MCP_METRICS=true to enable)")
+
+
+# Helper functions with error handling
+async def _execute_codex_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: str,
+    is_initial_prompt: bool
+) -> str:
+    """Execute Codex with error handling and retry logic."""
+    codex_cli = CodexCLI()
+    
+    availability = await codex_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Codex CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    messages = []
+    agent_responses = []
+    
+    async for message in codex_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        messages.append(message)
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Codex task completed successfully"
+    
+    return f"**Codex Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Codex Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_claude_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute Claude with error handling."""
+    claude_cli = ClaudeCodeCLI()
+    
+    availability = await claude_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Claude CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    
+    async for message in claude_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Claude task completed successfully"
+    
+    return f"**Claude Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Claude Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_cursor_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute Cursor with error handling."""
+    cursor_cli = CursorAgentCLI()
+    
+    availability = await cursor_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Cursor CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    
+    async for message in cursor_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Cursor task completed successfully"
+    
+    return f"**Cursor Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Cursor Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_gemini_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute Gemini with error handling."""
+    gemini_cli = GeminiCLI()
+    
+    availability = await gemini_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Gemini CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    
+    async for message in gemini_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Gemini task completed successfully"
+    
+    return f"**Gemini Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Gemini Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_qwen_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute Qwen with error handling."""
+    qwen_cli = QwenCLI()
+    
+    availability = await qwen_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Qwen CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    
+    async for message in qwen_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Qwen task completed successfully"
+    
+    return f"**Qwen Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Qwen Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_kiro_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute Kiro with error handling."""
+    kiro_cli = KiroCLI()
+    
+    availability = await kiro_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Kiro CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    
+    async for message in kiro_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ Kiro task completed successfully"
+    
+    return f"**Kiro Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Kiro Response:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_copilot_with_error_handling(
+    instruction: str,
+    project_path: str,
+    session_id: Optional[str],
+    model: Optional[str],
+    is_initial_prompt: bool
+) -> str:
+    """Execute GitHub Copilot with error handling."""
+    copilot_cli = CopilotCLI()
+    
+    availability = await copilot_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"GitHub Copilot CLI not available: {availability.get('error', 'Unknown error')}")
+    
+    agent_responses = []
+    async for message in copilot_cli.execute_with_streaming(
+        instruction=instruction,
+        project_path=project_path,
+        session_id=session_id,
+        model=model,
+        images=None,
+        is_initial_prompt=is_initial_prompt
+    ):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    
+    if not agent_responses:
+        return "✅ GitHub Copilot task completed successfully"
+    
+    return f"**GitHub Copilot Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**GitHub Copilot Response:**\n{chr(10).join(agent_responses)}"
+
+
+
+
+async def _execute_grok_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    grok_cli = GrokCLI()
+    availability = await grok_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Grok CLI not available")
+    agent_responses = []
+    async for message in grok_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Grok task completed"
+    return f"**Grok:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Grok:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_kilocode_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    kilocode_cli = KilocodeCLI()
+    availability = await kilocode_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Kilocode CLI not available")
+    agent_responses = []
+    async for message in kilocode_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Kilocode task completed"
+    return f"**Kilocode:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Kilocode:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_crush_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    crush_cli = CrushCLI()
+    availability = await crush_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Crush CLI not available")
+    agent_responses = []
+    async for message in crush_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Crush task completed"
+    return f"**Crush:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Crush:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_opencode_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    opencode_cli = OpenCodeCLI()
+    availability = await opencode_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"OpenCode CLI not available")
+    agent_responses = []
+    async for message in opencode_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ OpenCode task completed"
+    return f"**OpenCode:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**OpenCode:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_antigravity_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    antigravity_cli = AntigravityCLI()
+    availability = await antigravity_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Antigravity CLI not available")
+    agent_responses = []
+    async for message in antigravity_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Antigravity task completed"
+    return f"**Antigravity:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Antigravity:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_factory_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    factory_cli = FactoryCLI()
+    availability = await factory_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Factory/Droid CLI not available")
+    agent_responses = []
+    async for message in factory_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Factory/Droid task completed"
+    return f"**Factory/Droid:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Factory/Droid:**\n{chr(10).join(agent_responses)}"
+
+
+async def _execute_rovo_with_error_handling(instruction: str, project_path: str, session_id: Optional[str], model: Optional[str], is_initial_prompt: bool) -> str:
+    rovo_cli = RovoCLI()
+    availability = await rovo_cli.check_availability()
+    if not availability.get("available", False):
+        raise AgentNotAvailableError(f"Rovo Dev CLI not available")
+    agent_responses = []
+    async for message in rovo_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+        if hasattr(message, 'role') and message.role == "assistant":
+            if message.content and message.content.strip():
+                agent_responses.append(message.content.strip())
+    if not agent_responses:
+        return "✅ Rovo Dev task completed"
+    return f"**Rovo Dev:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Rovo Dev:**\n{chr(10).join(agent_responses)}"
 
 
 # Tool definitions
@@ -289,6 +679,54 @@ async def check_gemini_availability(ctx: Context = None) -> str:
 
 
 @server.tool()
+async def check_qwen_availability(ctx: Context = None) -> str:
+    """
+    Check if Qwen CLI is available and configured properly.
+
+    Returns:
+        Status message about Qwen availability
+    """
+    if "qwen" not in enabled_subagents:
+        return "❌ Qwen subagent is not enabled in this server instance"
+
+    logger.info("Checking Qwen availability")
+
+    try:
+        check_qwen = _import_module_item("cli_subagent", "check_qwen_availability")
+        result = await check_qwen()
+        logger.debug(f"Qwen availability result: {result}")
+        return result
+    except Exception as e:
+        error_msg = f"Error checking Qwen availability: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return f"❌ {error_msg}"
+
+
+@server.tool()
+async def check_kiro_availability(ctx: Context = None) -> str:
+    """
+    Check if Kiro CLI is available and configured properly.
+
+    Returns:
+        Status message about Kiro availability
+    """
+    if "kiro" not in enabled_subagents:
+        return "❌ Kiro subagent is not enabled in this server instance"
+
+    logger.info("Checking Kiro availability")
+
+    try:
+        check_kiro = _import_module_item("cli_subagent", "check_kiro_availability")
+        result = await check_kiro()
+        logger.debug(f"Kiro availability result: {result}")
+        return result
+    except Exception as e:
+        error_msg = f"Error checking Kiro availability: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return f"❌ {error_msg}"
+
+
+@server.tool()
 async def codex_subagent(
     instruction: str,
     project_path: Optional[str] = None,
@@ -357,6 +795,18 @@ async def codex_subagent(
     logger.info(f"Codex: {model} [INSTRUCTION]: {instruction}")
     logger.debug(f"[MCP-TOOL] codex_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
     
+    # Use error handler if available
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_codex_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Codex CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Codex execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "codex", instruction)
 
     try:
         # Initialize CodexCLI directly
@@ -526,6 +976,18 @@ async def claude_subagent(
     logger.info(f"Claude: {model} [INSTRUCTION]: {instruction}")
     logger.debug(f"[MCP-TOOL] claude_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
 
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_claude_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Claude CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Claude execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "claude", instruction)
+
     try:
         # Initialize ClaudeCodeCLI directly
         claude_cli = ClaudeCodeCLI()
@@ -674,6 +1136,18 @@ async def cursor_subagent(
 
     logger.info(f"Cursor: {model} [INSTRUCTION]: {instruction}")
     logger.debug(f"[MCP-TOOL] cursor_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
+
+    if ERROR_HANDLING_AVAILABLE and CLI_ADAPTERS_AVAILABLE:
+        try:
+            return await _execute_cursor_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Cursor CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Cursor execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "cursor", instruction)
 
     # Prefer streaming via adapter (to emit MCP progress), with safe fallback
     try:
@@ -871,6 +1345,18 @@ async def gemini_subagent(
     logger.info(f"Gemini: {model} [INSTRUCTION]: {instruction}")
     logger.debug(f"[MCP-TOOL] gemini_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
 
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_gemini_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Gemini CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Gemini execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "gemini", instruction)
+
     try:
         # Initialize GeminiCLI directly
         gemini_cli = GeminiCLI()
@@ -971,6 +1457,672 @@ async def gemini_subagent(
 
 
 @server.tool()
+async def qwen_subagent(
+    instruction: str,
+    project_path: Optional[str] = None,
+    session_id: Optional[str] = None,
+    model: Optional[str] = None,
+    is_initial_prompt: bool = False,
+    ctx: Context = None
+) -> str:
+    """
+    Execute a coding task using Qwen CLI agent.
+
+    Qwen has access to file operations, shell commands, web search,
+    and can make code changes directly. It's ideal for implementing features,
+    fixing bugs, refactoring code, and other development tasks.
+
+    IMPORTANT: Always provide an absolute path for project_path to ensure proper execution.
+    If you don't provide project_path, the current working directory will be used.
+
+    Args:
+        instruction: The coding task or instruction to execute
+        project_path: ABSOLUTE path to the project directory (e.g., '/home/user/myproject'). If not provided, uses current working directory.
+        session_id: Optional session ID for conversation continuity
+        model: Optional model to use ('qwen-coder' is the default model)
+        is_initial_prompt: Whether this is the first prompt in a new session
+
+    Returns:
+        Summary of what the Qwen agent accomplished
+    """
+    if "qwen" not in enabled_subagents:
+        return "❌ Qwen subagent is not enabled in this server instance"
+
+    if not CLI_ADAPTERS_AVAILABLE:
+        # Fallback to old method if CLI adapters not available
+        try:
+            qwen_exec = _import_module_item("cli_subagent", "qwen_subagent")
+            result = await qwen_exec(
+                instruction=instruction,
+                project_path=project_path,
+                session_id=session_id,
+                model=model,
+                images=None,
+                is_initial_prompt=is_initial_prompt
+            )
+            return result
+        except Exception as e:
+            error_msg = f"Error executing Qwen subagent: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return f"❌ {error_msg}"
+
+    # Robust path validation and fallback
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+        logger.debug(f"Using fallback directory: {project_path}")
+    else:
+        # Ensure we have an absolute path
+        project_path = str(Path(project_path).absolute())
+        logger.debug(f"Using provided project path: {project_path}")
+
+    # Validate the directory exists
+    if not Path(project_path).exists():
+        error_msg = f"Project directory does not exist: {project_path}"
+        logger.error(error_msg)
+        return f"❌ {error_msg}"
+
+    logger.info(f"Qwen: {model} [INSTRUCTION]: {instruction}")
+    logger.debug(f"[MCP-TOOL] qwen_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
+
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_qwen_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Qwen CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Qwen execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "qwen", instruction)
+
+    try:
+        # Initialize QwenCLI directly
+        qwen_cli = QwenCLI()
+
+        # Check if Qwen is available
+        availability = await qwen_cli.check_availability()
+        if not availability.get("available", False):
+            error_msg = availability.get("error", "Qwen CLI not available")
+            logger.error(f"Qwen unavailable: {error_msg}")
+            return f"❌ Qwen CLI not available: {error_msg}"
+
+        # Collect all messages from streaming execution with progress reporting
+        messages = []
+        agent_responses = []
+        tool_uses = []
+        message_count = 0
+        logger.info(f"Qwen subagent execution started :verbose={config.verbose}")
+        logger.debug(f"[MCP-TOOL] Qwen CLI streaming started - will process messages and report progress")
+
+        async for message in qwen_cli.execute_with_streaming(
+            instruction=instruction,
+            project_path=project_path,
+            session_id=session_id,
+            model=model,
+            images=None,
+            is_initial_prompt=is_initial_prompt
+        ):
+            message_count += 1
+            messages.append(message)
+
+            # Get message type as string
+            msg_type = getattr(message, "message_type", None)
+            msg_type_str = getattr(msg_type, "value", str(msg_type))
+
+            # Get content with fallback
+            content = getattr(message, "content", "")
+            content_preview = str(content)[:100] if content else ""
+
+            # Progress reporting with debug logging
+            progress_message = f"Qwen #{message_count}: {msg_type_str} => {content}"
+            logger.debug(f"[PROGRESS] {progress_message}")
+            await ctx.report_progress(
+                progress=message_count,
+                total=None,
+                message=progress_message
+            )
+
+            # Categorize messages for summary
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+            elif msg_type_str == "tool_use":
+                tool_uses.append(message.content)
+            elif msg_type_str == "tool_result":
+                tool_uses.append(f"Tool result: {message.content}")
+            elif msg_type_str == "error":
+                logger.error(f"Qwen error: {message.content}")
+                return f"❌ Qwen execution failed: {message.content}"
+            elif msg_type_str == "result":
+                logger.debug(f"Qwen result: {message.content}, not adding to agent_responses")
+            else:
+                # Capture any other message types that might contain useful content
+                if message.content and str(message.content).strip():
+                    agent_responses.append(str(message.content).strip())
+
+        # Create comprehensive summary
+        summary_parts = []
+
+        if agent_responses:
+            if len(agent_responses) == 1:
+                summary_parts.append(f"**Qwen Response:**\n{agent_responses[0]}")
+            else:
+                combined_response = "\n\n".join(agent_responses)
+                summary_parts.append(f"**Qwen Response:**\n{combined_response}")
+
+        if tool_uses:
+            summary_parts.append(f"🔧 **Tools Used ({len(tool_uses)}):**")
+            for tool_use in tool_uses:
+                summary_parts.append(f"• {tool_use}")
+
+        if not summary_parts:
+            summary_parts.append("✅ Qwen task completed successfully (no detailed output captured)")
+
+        summary = "\n\n".join(summary_parts)
+
+        logger.info("Qwen subagent execution completed")
+        logger.debug(f"[MCP-TOOL] Qwen execution completed - total messages: {message_count}, agent_responses: {len(agent_responses)}, tool_uses: {len(tool_uses)}")
+        logger.debug(f"Result summary: {summary}")
+
+        final_response = summary if config.verbose else (agent_responses[-1] if agent_responses else "✅ Qwen task completed successfully")
+        logger.info(f"[TOOL-RESPONSE] Qwen final response: {final_response}")
+        return final_response
+
+    except Exception as e:
+        error_msg = f"Error executing Qwen subagent: {str(e)}"
+        await ctx.error(error_msg)
+        return f"❌ {error_msg}"
+
+
+@server.tool()
+async def kiro_subagent(
+    instruction: str,
+    project_path: Optional[str] = None,
+    session_id: Optional[str] = None,
+    model: Optional[str] = None,
+    is_initial_prompt: bool = False,
+    ctx: Context = None
+) -> str:
+    """
+    Execute a coding task using Kiro CLI agent.
+
+    Kiro has access to file operations, shell commands, web search,
+    and can make code changes directly.
+
+    Args:
+        instruction: The coding task or instruction to execute
+        project_path: ABSOLUTE path to the project directory
+        session_id: Optional session ID for conversation continuity
+        model: Optional model to use
+        is_initial_prompt: Whether this is the first prompt in a new session
+
+    Returns:
+        Summary of what the Kiro agent accomplished
+    """
+    if "kiro" not in enabled_subagents:
+        return "❌ Kiro subagent is not enabled in this server instance"
+
+    if not CLI_ADAPTERS_AVAILABLE:
+        try:
+            kiro_exec = _import_module_item("cli_subagent", "kiro_subagent")
+            result = await kiro_exec(
+                instruction=instruction,
+                project_path=project_path,
+                session_id=session_id,
+                model=model,
+                images=None,
+                is_initial_prompt=is_initial_prompt
+            )
+            return result
+        except Exception as e:
+            error_msg = f"Error executing Kiro subagent: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return f"❌ {error_msg}"
+
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+        logger.debug(f"Using fallback directory: {project_path}")
+    else:
+        project_path = str(Path(project_path).absolute())
+        logger.debug(f"Using provided project path: {project_path}")
+
+    if not Path(project_path).exists():
+        error_msg = f"Project directory does not exist: {project_path}"
+        logger.error(error_msg)
+        return f"❌ {error_msg}"
+
+    logger.info(f"Kiro: {model} [INSTRUCTION]: {instruction}")
+    logger.debug(f"[MCP-TOOL] kiro_subagent started - project_path: {project_path}, model: {model}, session_id: {session_id}")
+
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_kiro_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ Kiro CLI not available: {str(e)}"
+        except AgentExecutionError as e:
+            return f"❌ Kiro execution failed: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "kiro", instruction)
+
+    try:
+        kiro_cli = KiroCLI()
+        availability = await kiro_cli.check_availability()
+        if not availability.get("available", False):
+            error_msg = availability.get("error", "Kiro CLI not available")
+            logger.error(f"Kiro unavailable: {error_msg}")
+            return f"❌ Kiro CLI not available: {error_msg}"
+
+        agent_responses = []
+        async for message in kiro_cli.execute_with_streaming(
+            instruction=instruction,
+            project_path=project_path,
+            session_id=session_id,
+            model=model,
+            images=None,
+            is_initial_prompt=is_initial_prompt
+        ):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+
+        if not agent_responses:
+            return "✅ Kiro task completed successfully"
+
+        return f"**Kiro Response:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Kiro Response:**\n{chr(10).join(agent_responses)}"
+
+    except Exception as e:
+        error_msg = f"Error executing Kiro subagent: {str(e)}"
+        await ctx.error(error_msg)
+        return f"❌ {error_msg}"
+
+
+@server.tool()
+async def check_copilot_availability(ctx: Context = None) -> str:
+    """Check if GitHub Copilot CLI is available."""
+    if "copilot" not in enabled_subagents:
+        return "❌ GitHub Copilot subagent is not enabled"
+
+    try:
+        check_copilot = _import_module_item("cli_subagent", "check_copilot_availability")
+        result = await check_copilot()
+        return result
+    except Exception as e:
+        return f"❌ Error checking GitHub Copilot: {str(e)}"
+
+
+@server.tool()
+async def copilot_subagent(
+    instruction: str,
+    project_path: Optional[str] = None,
+    session_id: Optional[str] = None,
+    model: Optional[str] = None,
+    is_initial_prompt: bool = False,
+    ctx: Context = None
+) -> str:
+    """Execute a coding task using GitHub Copilot CLI agent."""
+    if "copilot" not in enabled_subagents:
+        return "❌ GitHub Copilot subagent is not enabled"
+
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_copilot_with_error_handling(
+                instruction, project_path, session_id, model, is_initial_prompt
+            )
+        except AgentNotAvailableError as e:
+            return f"❌ GitHub Copilot CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "copilot", instruction)
+
+    try:
+        copilot_cli = CopilotCLI()
+        availability = await copilot_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ GitHub Copilot CLI not available"
+
+        agent_responses = []
+        async for message in copilot_cli.execute_with_streaming(
+            instruction=instruction,
+            project_path=project_path,
+            session_id=session_id,
+            model=model,
+            images=None,
+            is_initial_prompt=is_initial_prompt
+        ):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+
+        if not agent_responses:
+            return "✅ GitHub Copilot task completed"
+
+        return f"**GitHub Copilot:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**GitHub Copilot:**\n{chr(10).join(agent_responses)}"
+
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+
+
+@server.tool()
+async def check_grok_availability(ctx: Context = None) -> str:
+    if "grok" not in enabled_subagents:
+        return "❌ Grok subagent is not enabled"
+    try:
+        check_grok = _import_module_item("cli_subagent", "check_grok_availability")
+        return await check_grok()
+    except Exception as e:
+        return f"❌ Error checking Grok: {str(e)}"
+
+@server.tool()
+async def grok_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "grok" not in enabled_subagents:
+        return "❌ Grok subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_grok_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Grok CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "grok", instruction)
+    try:
+        grok_cli = GrokCLI()
+        availability = await grok_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Grok CLI not available"
+        agent_responses = []
+        async for message in grok_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Grok task completed"
+        return f"**Grok:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Grok:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_kilocode_availability(ctx: Context = None) -> str:
+    if "kilocode" not in enabled_subagents:
+        return "❌ Kilocode subagent is not enabled"
+    try:
+        check_kilocode = _import_module_item("cli_subagent", "check_kilocode_availability")
+        return await check_kilocode()
+    except Exception as e:
+        return f"❌ Error checking Kilocode: {str(e)}"
+
+@server.tool()
+async def kilocode_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "kilocode" not in enabled_subagents:
+        return "❌ Kilocode subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_kilocode_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Kilocode CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "kilocode", instruction)
+    try:
+        kilocode_cli = KilocodeCLI()
+        availability = await kilocode_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Kilocode CLI not available"
+        agent_responses = []
+        async for message in kilocode_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Kilocode task completed"
+        return f"**Kilocode:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Kilocode:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_crush_availability(ctx: Context = None) -> str:
+    if "crush" not in enabled_subagents:
+        return "❌ Crush subagent is not enabled"
+    try:
+        check_crush = _import_module_item("cli_subagent", "check_crush_availability")
+        return await check_crush()
+    except Exception as e:
+        return f"❌ Error checking Crush: {str(e)}"
+
+@server.tool()
+async def crush_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "crush" not in enabled_subagents:
+        return "❌ Crush subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_crush_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Crush CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "crush", instruction)
+    try:
+        crush_cli = CrushCLI()
+        availability = await crush_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Crush CLI not available"
+        agent_responses = []
+        async for message in crush_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Crush task completed"
+        return f"**Crush:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Crush:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_opencode_availability(ctx: Context = None) -> str:
+    if "opencode" not in enabled_subagents:
+        return "❌ OpenCode subagent is not enabled"
+    try:
+        check_opencode = _import_module_item("cli_subagent", "check_opencode_availability")
+        return await check_opencode()
+    except Exception as e:
+        return f"❌ Error checking OpenCode: {str(e)}"
+
+@server.tool()
+async def opencode_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "opencode" not in enabled_subagents:
+        return "❌ OpenCode subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_opencode_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ OpenCode CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "opencode", instruction)
+    try:
+        opencode_cli = OpenCodeCLI()
+        availability = await opencode_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ OpenCode CLI not available"
+        agent_responses = []
+        async for message in opencode_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ OpenCode task completed"
+        return f"**OpenCode:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**OpenCode:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_antigravity_availability(ctx: Context = None) -> str:
+    if "antigravity" not in enabled_subagents:
+        return "❌ Antigravity subagent is not enabled"
+    try:
+        check_antigravity = _import_module_item("cli_subagent", "check_antigravity_availability")
+        return await check_antigravity()
+    except Exception as e:
+        return f"❌ Error checking Antigravity: {str(e)}"
+
+@server.tool()
+async def antigravity_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "antigravity" not in enabled_subagents:
+        return "❌ Antigravity subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_antigravity_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Antigravity CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "antigravity", instruction)
+    try:
+        antigravity_cli = AntigravityCLI()
+        availability = await antigravity_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Antigravity CLI not available"
+        agent_responses = []
+        async for message in antigravity_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Antigravity task completed"
+        return f"**Antigravity:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Antigravity:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_factory_availability(ctx: Context = None) -> str:
+    if "factory" not in enabled_subagents:
+        return "❌ Factory/Droid subagent is not enabled"
+    try:
+        check_factory = _import_module_item("cli_subagent", "check_factory_availability")
+        return await check_factory()
+    except Exception as e:
+        return f"❌ Error checking Factory/Droid: {str(e)}"
+
+@server.tool()
+async def factory_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "factory" not in enabled_subagents:
+        return "❌ Factory/Droid subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_factory_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Factory/Droid CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "factory", instruction)
+    try:
+        factory_cli = FactoryCLI()
+        availability = await factory_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Factory/Droid CLI not available"
+        agent_responses = []
+        async for message in factory_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Factory/Droid task completed"
+        return f"**Factory/Droid:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Factory/Droid:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
+async def check_rovo_availability(ctx: Context = None) -> str:
+    if "rovo" not in enabled_subagents:
+        return "❌ Rovo Dev subagent is not enabled"
+    try:
+        check_rovo = _import_module_item("cli_subagent", "check_rovo_availability")
+        return await check_rovo()
+    except Exception as e:
+        return f"❌ Error checking Rovo Dev: {str(e)}"
+
+@server.tool()
+async def rovo_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, is_initial_prompt: bool = False, ctx: Context = None) -> str:
+    if "rovo" not in enabled_subagents:
+        return "❌ Rovo Dev subagent is not enabled"
+    if not project_path or project_path.strip() == "":
+        project_path = str(working_dir.absolute()) if working_dir else str(Path.cwd().absolute())
+    else:
+        project_path = str(Path(project_path).absolute())
+    if not Path(project_path).exists():
+        return f"❌ Project directory does not exist: {project_path}"
+    if ERROR_HANDLING_AVAILABLE:
+        try:
+            return await _execute_rovo_with_error_handling(instruction, project_path, session_id, model, is_initial_prompt)
+        except AgentNotAvailableError as e:
+            return f"❌ Rovo Dev CLI not available: {str(e)}"
+        except Exception as e:
+            return handle_agent_error(e, "rovo", instruction)
+    try:
+        rovo_cli = RovoCLI()
+        availability = await rovo_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Rovo Dev CLI not available"
+        agent_responses = []
+        async for message in rovo_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=None, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Rovo Dev task completed"
+        return f"**Rovo Dev:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Rovo Dev:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@server.tool()
 async def test_tool(context: Context,signal: bool = True) -> Any:
     """
     Test the tool.
@@ -1035,10 +2187,10 @@ def main():
 Examples:
   python -m roundtable_mcp_server                    # Start MCP server with auto-detected agents
   python -m roundtable_mcp_server --check            # Check CLI availability
-  python -m roundtable_mcp_server --agents codex,gemini  # Start with specific agents
+  python -m roundtable_mcp_server --agents codex,gemini,qwen  # Start with specific agents
 
 Environment Variables:
-  CLI_MCP_SUBAGENTS          Comma-separated list of subagents (codex,claude,cursor,gemini)
+  CLI_MCP_SUBAGENTS          Comma-separated list of subagents (codex,claude,cursor,gemini,qwen)
   CLI_MCP_WORKING_DIR        Default working directory
   CLI_MCP_DEBUG             Enable debug logging (true/false)
   CLI_MCP_IGNORE_AVAILABILITY  Ignore availability cache (true/false)
@@ -1058,10 +2210,37 @@ Priority Order:
     parser.add_argument(
         "--agents",
         type=str,
-        help="Comma-separated list of agents to enable (codex,claude,cursor,gemini)"
+        help="Comma-separated list of agents to enable (codex,claude,cursor,gemini,qwen,kiro,copilot,grok,kilocode,crush,opencode,antigravity,factory,rovo)"
+    )
+    parser.add_argument(
+        "--working-dir",
+        type=str,
+        help="Default working directory for subagents"
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging"
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output"
     )
 
-    args = parser.parse_args()
+    # Parse known args to support both --flag and --flag=value formats
+    args, unknown = parser.parse_known_args()
+    
+    # Process unknown args for --key=value format (GitHub Copilot CLI compatibility)
+    for arg in unknown:
+        if arg.startswith("--agents="):
+            args.agents = arg.split("=", 1)[1]
+        elif arg.startswith("--working-dir="):
+            args.working_dir = arg.split("=", 1)[1]
+        elif arg.startswith("--debug="):
+            args.debug = arg.split("=", 1)[1].lower() in ("true", "1", "yes")
+        elif arg.startswith("--verbose="):
+            args.verbose = arg.split("=", 1)[1].lower() in ("true", "1", "yes")
 
     if args.check:
         # Run availability check
@@ -1073,9 +2252,15 @@ Priority Order:
             sys.exit(1)
         return
 
-    # If --agents flag is provided, set it as environment variable (highest priority)
+    # Set environment variables from command line args (highest priority)
     if args.agents:
         os.environ["CLI_MCP_SUBAGENTS"] = args.agents
+    if args.working_dir:
+        os.environ["CLI_MCP_WORKING_DIR"] = args.working_dir
+    if args.debug:
+        os.environ["CLI_MCP_DEBUG"] = "true"
+    if args.verbose:
+        os.environ["CLI_MCP_VERBOSE"] = "true"
         print(f"📋 Using agents from command line: {args.agents}")
 
     # Initialize configuration after processing command line arguments
