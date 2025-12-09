@@ -24,6 +24,7 @@ from claudable_helper.cli.adapters.kilocode_cli import KilocodeCLI
 from claudable_helper.cli.adapters.crush_cli import CrushCLI
 from claudable_helper.cli.adapters.opencode_cli import OpenCodeCLI
 from claudable_helper.cli.adapters.antigravity_cli import AntigravityCLI
+from claudable_helper.cli.adapters.factory_cli import FactoryCLI
 from claudable_helper.core.terminal_ui import ui
 from claudable_helper.models.messages import Message
 
@@ -41,6 +42,7 @@ _kilocode_cli = None
 _crush_cli = None
 _opencode_cli = None
 _antigravity_cli = None
+_factory_cli = None
 
 
 def _check_claude_code_sdk() -> tuple[bool, str]:
@@ -1324,6 +1326,52 @@ async def check_antigravity_availability() -> str:
             return f"❌ **Antigravity CLI Unavailable**"
     except Exception as e:
         return f"❌ **Error checking Antigravity:** {str(e)}"
+
+
+
+
+async def get_factory_cli() -> FactoryCLI:
+    global _factory_cli
+    if _factory_cli is None:
+        _factory_cli = FactoryCLI()
+    return _factory_cli
+
+
+@tool(name="factory_subagent", description="Execute a coding task using Factory/Droid CLI agent.")
+async def factory_subagent(instruction: str, project_path: Optional[str] = None, session_id: Optional[str] = None, model: Optional[str] = None, images: Optional[List[Dict[str, Any]]] = None, is_initial_prompt: bool = False) -> str:
+    try:
+        factory_cli = await get_factory_cli()
+        availability = await factory_cli.check_availability()
+        if not availability.get("available", False):
+            return f"❌ Factory/Droid CLI not available"
+        if not project_path or project_path.strip() == "":
+            project_path = str(Path.cwd().absolute())
+        else:
+            project_path = str(Path(project_path).absolute())
+        if not Path(project_path).exists():
+            return f"❌ Project directory does not exist: {project_path}"
+        agent_responses = []
+        async for message in factory_cli.execute_with_streaming(instruction=instruction, project_path=project_path, session_id=session_id, model=model, images=images, is_initial_prompt=is_initial_prompt):
+            if hasattr(message, 'role') and message.role == "assistant":
+                if message.content and message.content.strip():
+                    agent_responses.append(message.content.strip())
+        if not agent_responses:
+            return "✅ Factory/Droid task completed"
+        return f"**Factory/Droid:**\n{agent_responses[0]}" if len(agent_responses) == 1 else f"**Factory/Droid:**\n{chr(10).join(agent_responses)}"
+    except Exception as e:
+        return f"❌ Factory/Droid execution failed: {str(e)}"
+
+@tool(name="check_factory_availability")
+async def check_factory_availability() -> str:
+    try:
+        factory_cli = await get_factory_cli()
+        availability = await factory_cli.check_availability()
+        if availability.get("available", False):
+            return "✅ **Factory/Droid CLI Available**"
+        else:
+            return f"❌ **Factory/Droid CLI Unavailable**"
+    except Exception as e:
+        return f"❌ **Error checking Factory/Droid:** {str(e)}"
 
 
 class CLISubagentManager:
