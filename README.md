@@ -1017,6 +1017,50 @@ Options:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+### Development Setup
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/roundtable.git
+cd roundtable
+
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Or use the setup script
+./scripts/setup-dev.sh
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov --cov-report=html
+
+# Run specific test types
+pytest -m unit          # Unit tests only
+pytest -m integration   # Integration tests only
+
+# Run specific test file
+pytest tests/unit/test_server_config.py
+```
+
+### Code Quality
+
+```bash
+# Format code
+black .
+
+# Lint code
+ruff check .
+
+# Type checking
+mypy roundtable_mcp_server
+```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
